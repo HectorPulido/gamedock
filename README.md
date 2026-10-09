@@ -21,6 +21,39 @@ Game library:
 
 ## Getting started
 
+For a local demo with OpenTTD included, run:
+
+```sh
+./scripts/start-local.sh
+```
+
+The script creates `.env` with a random administrator password if it does not
+exist, builds the runtime and game images, starts the portal, waits for its health
+check, and registers OpenTTD. Open `http://localhost:8080` and use the credentials
+in `.env`, or create your own account. Repeating the command preserves existing
+credentials and data and updates the bundled OpenTTD profile. All application
+dependencies run in Docker; the host needs Docker Engine, Docker Compose, and
+Bash. On macOS, Docker Desktop or OrbStack provides the Linux environment.
+
+### Initial administrator credentials
+
+After running `./scripts/start-local.sh`, the initial username is `admin` and a
+random password is saved as `ADMIN_PASSWORD` in `.env` at the repository root.
+To display the credentials locally:
+
+```sh
+sed -n '/^ADMIN_USER=/p; /^ADMIN_PASSWORD=/p' .env
+```
+
+Use those values in the sign-in form at `http://localhost:8080`. Keep `.env`
+private; it is excluded from Git. The administrator is created only when the
+database is initialized. Editing `.env` later does not reset an existing
+administrator's password. If `.env` already existed before running the script,
+its credentials are preserved. You can also create a regular account through
+the sign-in screen; only administrators can edit settings and game profiles.
+
+### Manual setup
+
 Requirements: a Linux server with Docker Engine 26+ and Docker Compose. Tested on
 x86_64. Serving the platform does not require Wine or Python on the host.
 
