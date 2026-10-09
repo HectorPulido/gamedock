@@ -128,7 +128,11 @@ Dofus de `upstream/` es sólo referencia, no una dependencia ejecutable.
 
 - El volumen `gamedock_gamedock-data` guarda SQLite: cuentas, hashes scrypt,
   tokens revocables, perfiles, configuración e historial.
-- `gamedock-user-UID-JUEGO` guarda `/data`. Varias sesiones de la misma cuenta y
+- `NAMESPACE-user-UID-JUEGO` guarda `/data`; el namespace es el nombre del proyecto
+  Compose por defecto (`gamedock`). `GAMEDOCK_NAMESPACE` permite fijarlo de forma
+  explícita con 1–40 letras minúsculas, números o guiones. Mantenlo estable y usa
+  nombres distintos para instalaciones que no deban compartir archivos.
+  Varias sesiones de la misma cuenta y
   juego comparten archivos. Para juegos que bloquean su perfil usa límite por
   usuario 1 o perfiles diferentes. Guarda antes de terminar; el cierre elimina
   el contenedor pero conserva el volumen.

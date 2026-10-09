@@ -99,6 +99,11 @@ def validate_profile(data):
 
 class Docker:
     def __init__(self):
+        self.namespace = os.getenv("GAMEDOCK_NAMESPACE", "gamedock")
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", self.namespace):
+            raise RuntimeError(
+                "GAMEDOCK_NAMESPACE: usa de 1 a 40 letras minúsculas, números o guiones"
+            )
         self.portal = os.getenv("PORTAL_CONTAINER", os.getenv("HOSTNAME", ""))
         self.http = None
         self.connection_lock = asyncio.Lock()
@@ -117,7 +122,7 @@ class Docker:
     async def start(self, sid, uid, profile, resolution):
         name = "gamedock-" + sid
         session_network = "gamedock-session-" + sid
-        volume = "gamedock-user-" + str(uid) + "-" + profile["id"]
+        volume = self.namespace + "-user-" + str(uid) + "-" + profile["id"]
         # Docker initializes a fresh named volume from /data, including ownership.
         definition = {
             "Image": profile["image"],

@@ -11,6 +11,7 @@ services:
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Define ADMIN_PASSWORD in .env}
       DATABASE: /data/gamedock.sqlite
+      GAMEDOCK_NAMESPACE: ${GAMEDOCK_NAMESPACE:-${COMPOSE_PROJECT_NAME:-gamedock}}
     volumes:
       - gamedock-data:/data
       - /var/run/docker.sock:/var/run/docker.sock

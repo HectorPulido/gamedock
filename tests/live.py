@@ -156,6 +156,9 @@ with tempfile.TemporaryDirectory() as directory:
             )[0]
             assert not info["HostConfig"]["PortBindings"], "Session port exposed"
             assert info["Config"]["User"] == "player"
+            assert info["Mounts"][0]["Name"].startswith("gamedock-qa-user-"), (
+                "Volume is not scoped to the QA deployment"
+            )
             assert list(info["NetworkSettings"]["Networks"]) == [
                 "gamedock-session-" + sid
             ]
