@@ -57,7 +57,7 @@ project on macOS ARM64, separate from the user's local demonstration data:
 - Chromium verifies automatic same-tab launch, centered and scaled game frames,
   actual keyboard input, previous-instance navigation, logout revocation, hidden
   stopped instances, and mobile layout.
-- Chromium adds OpenTTD using the structured Add game form, creates and redeems an
+- Chromium adds OpenTTD using the Add game editor, creates and redeems an
   invitation, changes the toolbar setting for a running viewer, edits account
   limits, and stops the rendered game.
 - The real Docker/CLI suite checks administrator-selected player resolutions,
@@ -70,3 +70,7 @@ The network probe found that OrbStack permits sibling traffic between ordinary
 Docker bridges. Session networks are now internal by default; the repeat isolation
 check passed. Internet access is an explicit game profile option and requires a
 native Linux Docker host for sibling isolation, as documented in the README.
+
+The JSON editor was restored with explicit Add game and Edit game modes.
+Chromium verifies creation from a new template, loading an existing definition,
+and resetting the editor with New game, alongside the OpenTTD player flow.

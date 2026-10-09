@@ -138,101 +138,18 @@
             </form>
             <form id="profile">
               <h3 id="profile-title">Add game</h3>
-              <p>
-                Install a Docker image on the server, then add it to the library
-                here.
+              <p id="profile-mode-help">
+                Create a game with a new ID. Use Edit on a game card to modify
+                an existing game.
               </p>
               <label
-                >Game ID<input
-                  name="game_id"
+                >JSON definition<textarea
+                  name="definition"
+                  rows="22"
+                  spellcheck="false"
                   required
-                  pattern="[a-z0-9][a-z0-9-]{0,39}"
-                  maxlength="40"
-                  placeholder="my-game"
-              /></label>
-              <label
-                >Game name<input
-                  name="game_name"
-                  required
-                  maxlength="200"
-                  placeholder="My game"
-              /></label>
-              <label
-                >Description<textarea
-                  name="description"
-                  maxlength="2000"
                 ></textarea>
               </label>
-              <label
-                >Docker image<input
-                  name="image"
-                  required
-                  placeholder="gamedock-openttd:local"
-              /></label>
-              <label
-                >Launch command and arguments<textarea
-                  name="command"
-                  rows="3"
-                  required
-                  placeholder="/usr/local/bin/launch-openttd"
-                ></textarea>
-              </label>
-              <p class="help">
-                One argument per line. The first line is the executable; no
-                shell is implied.
-              </p>
-              <label
-                >Available resolutions<input
-                  name="resolutions"
-                  value="1280x720,1920x1080"
-                  required
-              /></label>
-              <label
-                >Player resolution<input
-                  name="default_resolution"
-                  value="1280x720"
-                  required
-              /></label>
-              <p class="help">
-                Players always use this resolution. Only administrators can
-                choose another.
-              </p>
-              <label
-                >Instances of this game per player<input
-                  name="max_per_user"
-                  type="number"
-                  min="0"
-                  max="100"
-                  value="1"
-                  required
-              /></label>
-              <label class="check"
-                ><input type="checkbox" name="enabled" checked />Available to
-                players</label
-              >
-              <label
-                >Game banner (optional URL)<input name="game_banner" type="url"
-              /></label>
-              <details class="advanced">
-                <summary>Advanced settings</summary>
-                <label class="check"
-                  ><input type="checkbox" name="internet_access" />Allow
-                  internet access</label
-                >
-                <p class="help">
-                  Off by default. Internet-enabled games require a Linux Docker
-                  host to preserve isolation between game networks.
-                </p>
-                <label
-                  >Environment variables (JSON)<textarea
-                    name="env"
-                    rows="4"
-                    spellcheck="false"
-                  >
-{}</textarea
-                  >
-                </label>
-              </details>
               <div class="actions">
                 <button>Save game</button
                 ><button type="button" id="new-game" class="secondary">

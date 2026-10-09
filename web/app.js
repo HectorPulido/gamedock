@@ -232,28 +232,33 @@ function editGame(game) {
   profileEditing = !!game;
   const f = $("#profile").elements;
   $("#profile-title").textContent = game ? "Edit game" : "Add game";
-  f.game_id.value = game?.id || "";
-  f.game_id.readOnly = !!game;
-  f.game_name.value = game?.name || "";
-  f.description.value = game?.description || "";
-  f.image.value = game?.image || "";
-  f.command.value = (game?.command || []).join("\n");
-  f.resolutions.value = (game?.resolutions || ["1280x720", "1920x1080"]).join(
-    ",",
+  $("#profile-mode-help").textContent = game
+    ? "Editing an existing game. Save to update its definition. Use New game to start a separate profile."
+    : "Create a game with a new ID. Saving an existing ID updates that game.";
+  f.definition.value = JSON.stringify(
+    game || {
+      id: "my-game",
+      name: "My game",
+      description: "Describe the game",
+      image: "my-game:local",
+      command: ["/opt/game/start"],
+      resolutions: ["1280x720", "1920x1080"],
+      default_resolution: "1280x720",
+      max_per_user: 1,
+      enabled: true,
+      internet_access: false,
+      banner: "",
+      env: {},
+    },
+    null,
+    2,
   );
-  f.default_resolution.value =
-    game?.default_resolution || game?.resolutions?.[0] || "1280x720";
-  f.max_per_user.value = game?.max_per_user ?? 1;
-  f.enabled.checked = game?.enabled ?? true;
-  f.internet_access.checked = game?.internet_access ?? false;
-  f.game_banner.value = game?.banner || "";
-  f.env.value = JSON.stringify(game?.env || {}, null, 2);
 }
 function newGame() {
   editGame();
   $("#admin details").open = true;
   $("#profile").scrollIntoView({ behavior: "smooth" });
-  $("#profile").elements.game_name.focus();
+  $("#profile").elements.definition.focus();
 }
 $("#add-game").onclick = newGame;
 $("#new-game").onclick = newGame;
@@ -263,27 +268,11 @@ $("#profile").oninput = () => {
 $("#profile").onsubmit = (e) => {
   e.preventDefault();
   action(async () => {
-    const f = e.target.elements;
-    await api("/admin/games", "PUT", {
-      id: f.game_id.value,
-      name: f.game_name.value,
-      description: f.description.value,
-      image: f.image.value,
-      command: f.command.value
-        .split("\n")
-        .map((v) => v.trim())
-        .filter(Boolean),
-      resolutions: f.resolutions.value
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean),
-      default_resolution: f.default_resolution.value.trim(),
-      max_per_user: Number(f.max_per_user.value),
-      enabled: f.enabled.checked,
-      internet_access: f.internet_access.checked,
-      banner: f.game_banner.value,
-      env: JSON.parse(f.env.value),
-    });
+    await api(
+      "/admin/games",
+      "PUT",
+      JSON.parse(e.target.elements.definition.value),
+    );
     profileEditing = false;
     await load();
     message("Game saved.");

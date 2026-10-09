@@ -30,23 +30,34 @@ with sync_playwright() as p:
         page.get_by_role("heading", name="GameDock Playroom", exact=True)
     ).to_be_visible()
     page.wait_for_function("document.querySelector('#intro-banner').naturalWidth>0")
-    # The visible Add game button opens a complete form; no raw profile JSON required.
+    # Add game starts a new JSON template; Edit loads the existing definition.
     page.get_by_role("button", name="Add game", exact=True).click()
     profile = json.loads(Path("examples/openttd/profile.json").read_text())
     form = page.locator("#profile")
-    form.get_by_label("Game ID", exact=True).fill(profile["id"])
-    form.get_by_label("Game name", exact=True).fill(profile["name"])
-    form.get_by_label("Description", exact=True).fill(profile["description"])
-    form.get_by_label("Docker image", exact=True).fill(profile["image"])
-    form.get_by_label("Launch command and arguments").fill(
-        "\n".join(profile["command"])
+    expect(form.get_by_role("heading", name="Add game", exact=True)).to_be_visible()
+    assert (
+        json.loads(form.get_by_label("JSON definition").input_value())["id"]
+        == "my-game"
     )
-    form.get_by_label("Available resolutions").fill(",".join(profile["resolutions"]))
-    form.get_by_label("Player resolution", exact=True).fill("1280x720")
-    form.get_by_label("Instances of this game per player").fill("1")
+    form.get_by_label("JSON definition").fill(json.dumps(profile, indent=2))
     page.get_by_role("button", name="Save game", exact=True).click()
     expect(page.get_by_text("Game saved.", exact=True)).to_be_visible()
     expect(page.get_by_role("heading", name="OpenTTD", exact=True)).to_be_visible()
+    card = page.locator("article").filter(
+        has=page.get_by_role("heading", name="OpenTTD", exact=True)
+    )
+    card.get_by_role("button", name="Edit", exact=True).click()
+    expect(form.get_by_role("heading", name="Edit game", exact=True)).to_be_visible()
+    assert (
+        json.loads(form.get_by_label("JSON definition").input_value())["id"]
+        == "openttd"
+    )
+    form.get_by_role("button", name="New game", exact=True).click()
+    expect(form.get_by_role("heading", name="Add game", exact=True)).to_be_visible()
+    assert (
+        json.loads(form.get_by_label("JSON definition").input_value())["id"]
+        == "my-game"
+    )
     invitation = page.locator("#invitation-form")
     invitation.get_by_label("Label", exact=True).fill("Browser QA")
     invitation.get_by_role("button", name="Create invitation").click()
@@ -102,5 +113,5 @@ with sync_playwright() as p:
     expect(player.locator("#instances .instance")).to_have_count(0)
     browser.close()
 print(
-    "PASS: visible game creation form, invitation creation/redemption, rendered OpenTTD, live toolbar setting, account limits, stop and hidden history"
+    "PASS: JSON game creation and edit modes, invitation creation/redemption, rendered OpenTTD, live toolbar setting, account limits, stop and hidden history"
 )

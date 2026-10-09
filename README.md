@@ -104,12 +104,13 @@ server and `--credentials` to maintain separate sessions.
 
 Derive an image from `gamedock-runtime:local`, install the program, and keep the
 `player` user (UID 1000). The working directory is `/data`, persisted per account
-and game. As an administrator, click **Add game** above the library. Fill in the
-name, unique ID, installed Docker image, launch command (one argument per line),
-available resolutions, player resolution, and per-player instance limit. Click
-**Save game** to publish it. Use **Edit** on a game card to update it. Environment
-variables and Internet access are optional under Advanced settings. The image must already be built
-or pulled on the server; adding a game does not download it.
+and game. As an administrator, click **Add game** above the library to open a
+new JSON template. Give it a unique `id`, set its name, installed Docker image,
+launch command, resolutions, and limits, then click **Save game**. Click **Edit**
+on an existing game card to load its JSON definition. **New game** resets the
+editor to a fresh template. Saving an existing ID updates that game; saving a new
+ID creates a game. The image must already be built or pulled on the server;
+adding a profile does not download it.
 
 Alternatively, create a profile through the CLI as an administrator:
 
@@ -226,8 +227,7 @@ but still obey the platform's global and per-account concurrent limits.
 Game networks are internal by default: the portal can reach each desktop, but
 games cannot reach the Internet or sibling game networks. This also preserves
 isolation when using OrbStack for the local demo. For a game that needs downloads,
-authentication, or online multiplayer, enable **Advanced settings → Allow internet
-access** (`internet_access: true` in its profile). Use a native Linux Docker host
+authentication, or online multiplayer, set `internet_access: true` in its JSON profile. Use a native Linux Docker host
 for Internet-enabled games: OrbStack permits traffic between ordinary bridges,
 so separate non-internal networks alone do not provide sibling isolation there.
 Network changes apply to newly launched instances.
