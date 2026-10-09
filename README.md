@@ -1,7 +1,7 @@
 # GameDock
 
-A framework for serving game desktops through a browser, extracted from the
-Starloco harness. Accounts and configuration are independent of Dofus.
+A framework for serving game desktops through a browser, with independent
+accounts, configuration, and isolated game instances.
 
 Includes registration, sign-in and sign-out, a bootstrap administrator, an editable
 game catalog, platform name and banners, per-game resolutions, global and per-user
@@ -19,14 +19,10 @@ Game library:
 
 <img src="docs/screenshots/library.png" alt="GameDock game library and running instance" width="800" style="max-width: 100%; height: auto;" />
 
-Administration:
-
-<img src="docs/screenshots/admin.png" alt="GameDock administration settings and game profile editor" width="800" style="max-width: 100%; height: auto;" />
-
 ## Getting started
 
 Requirements: a Linux server with Docker Engine 26+ and Docker Compose. Tested on
-x86_64. Serving the platform does not require Dofus, Wine, or Python on the host.
+x86_64. Serving the platform does not require Wine or Python on the host.
 
 ```sh
 git clone git@github.com:HectorPulido/gamedock.git
@@ -136,8 +132,7 @@ python3 cli/gamedock.py launch minecraft --resolution 1280x720
 
 `examples/wine/` provides a Windows adapter. Put the game files in
 `examples/wine/client/`, adjust `Game.exe`, build `gamedock-wine:local`, and import
-its `profile.json`. The Wine prefix is persisted at `/data/wine`. The historical
-Dofus image under `upstream/` is reference material, not an executable dependency.
+its `profile.json`. The Wine prefix is persisted at `/data/wine`.
 
 ## Persistence and operation
 
@@ -212,11 +207,3 @@ forms, the banner image, and a real OpenTTD session. Build the browser environme
 with `tests/Dockerfile.browser`; screenshots are written to `/artifacts`. The QA
 portal uses `PUBLIC_URL=http://gamedock-qa-portal-1:8080`, passed to the browser as
 `QA_URL`; the QA CLI connects through loopback:18088.
-
-## Provenance
-
-`upstream/` contains reference code extracted from `HectorPulido/starloco-private`.
-`upstream/REVISION` identifies the original source commit. Reference messages and
-default language settings have since been translated to English; the files are
-not byte-for-byte copies of that revision. The extraction did not modify or
-restart Dofus. The framework runs without accessing Dofus services or databases.
