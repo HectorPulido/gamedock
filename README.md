@@ -9,6 +9,20 @@ limits, account management, instance termination, and a CLI. Each instance runs 
 command in its own container. The portal authenticates HTTP and WebSocket access
 to Xpra; session containers do not publish ports to the host.
 
+## Screenshots
+
+OpenTTD running through the browser:
+
+<img src="docs/screenshots/openttd.png" alt="OpenTTD running in a GameDock browser desktop" width="800" style="max-width: 100%; height: auto;" />
+
+Game library:
+
+<img src="docs/screenshots/library.png" alt="GameDock game library and running instance" width="800" style="max-width: 100%; height: auto;" />
+
+Administration:
+
+<img src="docs/screenshots/admin.png" alt="GameDock administration settings and game profile editor" width="800" style="max-width: 100%; height: auto;" />
+
 ## Getting started
 
 Requirements: a Linux server with Docker Engine 26+ and Docker Compose. Tested on
