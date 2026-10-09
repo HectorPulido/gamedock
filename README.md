@@ -136,6 +136,16 @@ its `profile.json`. The Wine prefix is persisted at `/data/wine`.
 
 ## Persistence and operation
 
+### Desktop toolbar
+
+Set `DESKTOP_TOOLBAR = False` in `server/app.py` to hide Xpra's floating toolbar,
+or `True` to show it (the default). Rebuild and recreate the portal with
+`docker compose up -d --build`, then reopen the desktop from the library.
+Running games do not need to restart. For a single connection, append
+`?floating_menu=false` or `?floating_menu=true` to its desktop URL to override
+the default. Hiding the toolbar only changes the interface; it does not disable
+the underlying Xpra features.
+
 - The `gamedock_gamedock-data` volume stores SQLite data: accounts, scrypt password
   hashes, revocable tokens, profiles, configuration, and instance history.
 - `NAMESPACE-user-UID-GAME` persists `/data`. The namespace defaults to the Compose

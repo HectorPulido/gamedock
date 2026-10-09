@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest.mock import patch
 from aiohttp.test_utils import TestClient, TestServer
 from server.app import create_app, validate_profile
 
@@ -58,6 +59,23 @@ class API(unittest.IsolatedAsyncioTestCase):
         self.client.session.cookie_jar.clear()
         response = await self.client.get("/api/instances", headers=alice)
         self.assertEqual(response.status, 401)
+
+    async def test_desktop_toolbar_defaults(self):
+        alice = await self.login()
+        response = await self.client.post(
+            "/api/instances", json={"game": "desktop"}, headers=alice
+        )
+        url = (await response.json())["url"]
+        for enabled in (True, False):
+            with patch("server.app.DESKTOP_TOOLBAR", enabled):
+                response = await self.client.get(
+                    url + "?autohide=true", headers=alice, allow_redirects=False
+                )
+            self.assertEqual(response.status, 302)
+            self.assertIn(
+                "floating_menu=" + str(enabled).lower(), response.headers["Location"]
+            )
+            self.assertIn("autohide=true", response.headers["Location"])
 
     async def test_admin_settings_profiles_and_disabled_user(self):
         alice = await self.login()

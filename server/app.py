@@ -13,6 +13,8 @@ import aiohttp
 from aiohttp import web
 
 ROOT = Path(__file__).resolve().parent.parent
+# Show Xpra's floating controls by default. Set False for a clean game view.
+DESKTOP_TOOLBAR = True
 
 
 def password_hash(password, salt=None):
@@ -586,6 +588,18 @@ async def proxy(request):
         raise web.HTTPForbidden(text="Invalid origin")
     if instance["status"] != "running":
         raise web.HTTPConflict(text="Instance stopped")
+    if (
+        request.match_info.get("tail", "") in ("", "index.html")
+        and "floating_menu" not in request.query
+        and request.headers.get("Upgrade", "").lower() != "websocket"
+    ):
+        return web.HTTPFound(
+            location=str(
+                request.rel_url.update_query(
+                    floating_menu="true" if DESKTOP_TOOLBAR else "false"
+                )
+            )
+        )
     info = await request.app["docker"].inspect(instance["id"])
     if not info or not info["State"]["Running"]:
         raise web.HTTPGone(text="The desktop has stopped")
