@@ -17,7 +17,7 @@ async function api(path, method = "GET", body) {
   });
   const data = await response.json();
   if (!response.ok)
-    throw Error(data.error || "No se pudo completar la operación");
+    throw Error(data.error || "The operation could not be completed");
   return data;
 }
 async function action(fn, button) {
@@ -63,7 +63,7 @@ async function load() {
   $("#identity").replaceChildren();
   if (!state.user) return;
   $("#identity").append(node("span", state.user.username + " "));
-  const out = node("button", "Salir", "secondary");
+  const out = node("button", "Sign out", "secondary");
   out.onclick = () =>
     action(async () => {
       await api("/logout", "POST", {});
@@ -84,13 +84,13 @@ async function load() {
     $("#settings").elements.registration.checked = state.settings.registration;
     $("#profile").elements.definition.value = JSON.stringify(
       {
-        id: "mi-juego",
-        name: "Mi juego",
-        image: "mi-juego:local",
+        id: "my-game",
+        name: "My game",
+        image: "my-game:local",
         command: ["/opt/game/start"],
         resolutions: ["1280x720", "1920x1080"],
         env: {},
-        description: "Describe el juego",
+        description: "Describe the game",
       },
       null,
       2,
@@ -111,7 +111,7 @@ function renderGames() {
     } else cover.textContent = "▦";
     const body = node("div", null, "game-body");
     body.append(node("h3", game.name), node("p", game.description));
-    const label = node("label", "Resolución");
+    const label = node("label", "Resolution");
     const select = node("select");
     for (const size of game.resolutions) {
       const o = node("option", size);
@@ -119,7 +119,7 @@ function renderGames() {
       select.append(o);
     }
     label.append(select);
-    const launch = node("button", "Abrir instancia");
+    const launch = node("button", "Launch instance");
     launch.onclick = () =>
       action(async () => {
         const instance = await api("/instances", "POST", {
@@ -127,21 +127,21 @@ function renderGames() {
           resolution: select.value,
         });
         message(
-          "Instancia creada. El escritorio puede tardar unos segundos en estar listo.",
+          "Instance created. The desktop may take a few seconds to become ready.",
         );
         await refresh();
       }, launch);
     body.append(label, launch);
     if (state.user.admin) {
-      const edit = node("button", "Editar", "secondary");
+      const edit = node("button", "Edit", "secondary");
       edit.onclick = () => {
         $("#admin details").open = true;
         $("#profile").elements.definition.value = JSON.stringify(game, null, 2);
         $("#profile").scrollIntoView({ behavior: "smooth" });
       };
-      const remove = node("button", "Quitar del catálogo", "danger");
+      const remove = node("button", "Remove from catalog", "danger");
       remove.onclick = () => {
-        if (confirm("¿Quitar " + game.name + " del catálogo?"))
+        if (confirm("Remove " + game.name + " from the catalog?"))
           action(async () => {
             await api("/admin/games/" + game.id, "DELETE", {});
             await load();
@@ -159,7 +159,7 @@ function renderGames() {
     $("#games").append(
       node(
         "p",
-        "No hay juegos disponibles. El administrador puede añadirlos al catálogo.",
+        "No games are available. An administrator can add them to the catalog.",
       ),
     );
 }
@@ -170,7 +170,7 @@ async function refresh() {
     $("#instances").append(
       node(
         "p",
-        "Todavía no tienes instancias. Elige un juego para abrir la primera.",
+        "You have no instances yet. Choose a game to launch your first one.",
       ),
     );
   for (const i of list) {
@@ -184,27 +184,23 @@ async function refresh() {
         i.resolution +
           " · " +
           ({
-            running: "En ejecución",
-            starting: "Iniciando",
-            stopped: "Detenida",
-            failed: "Falló el inicio",
+            running: "Running",
+            starting: "Starting",
+            stopped: "Stopped",
+            failed: "Startup failed",
           }[i.status] || i.status) +
-          (state.user.admin ? " · Cuenta " + i.uid : ""),
+          (state.user.admin ? " · Account " + i.uid : ""),
       ),
     );
     const controls = node("div", null, "actions");
     if (i.status === "running") {
-      const open = node("a", "Conectar", "button");
+      const open = node("a", "Connect", "button");
       open.href = "/desktop/" + i.id + "/";
       open.target = "_blank";
       open.rel = "noopener";
-      const stop = node("button", "Terminar", "danger");
+      const stop = node("button", "Stop", "danger");
       stop.onclick = () => {
-        if (
-          confirm(
-            "¿Terminar esta instancia? Guarda tu partida antes de continuar.",
-          )
-        )
+        if (confirm("Stop this instance? Save your game before continuing."))
           action(async () => {
             await api("/instances/" + i.id, "DELETE", {});
             await refresh();
@@ -229,7 +225,7 @@ $("#settings").onsubmit = (e) => {
       per_user: Number(f.elements.per_user.value),
     });
     await load();
-    message("Configuración guardada.");
+    message("Settings saved.");
   }, e.submitter);
 };
 $("#profile").onsubmit = (e) => {
@@ -241,7 +237,7 @@ $("#profile").onsubmit = (e) => {
       JSON.parse(e.target.elements.definition.value),
     );
     await load();
-    message("Juego guardado.");
+    message("Game saved.");
   }, e.submitter);
 };
 async function users() {
@@ -253,20 +249,20 @@ async function users() {
       node(
         "span",
         u.username +
-          (u.admin ? " · Administrador" : "") +
-          (u.enabled ? "" : " · Desactivado"),
+          (u.admin ? " · Administrator" : "") +
+          (u.enabled ? "" : " · Disabled"),
       ),
     );
     if (u.id !== state.user.id) {
       const toggle = node(
         "button",
-        u.enabled ? "Desactivar cuenta" : "Activar cuenta",
+        u.enabled ? "Disable account" : "Enable account",
         "secondary",
       );
       toggle.onclick = () => {
         if (
           !u.enabled ||
-          confirm("¿Desactivar esta cuenta y terminar sus instancias?")
+          confirm("Disable this account and stop its instances?")
         )
           action(async () => {
             await api("/admin/users/" + u.id, "PATCH", { enabled: !u.enabled });

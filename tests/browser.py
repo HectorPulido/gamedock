@@ -34,20 +34,20 @@ with sync_playwright() as p:
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     page.goto(url)
-    page.get_by_role("heading", name="Entra a tu biblioteca").wait_for()
+    page.get_by_role("heading", name="Sign in to your library").wait_for()
     page.screenshot(path="/artifacts/login.png", full_page=True)
     username, password = "qa_" + secrets.token_hex(4), secrets.token_urlsafe(20)
-    page.get_by_label("Usuario", exact=True).fill(username)
-    page.get_by_label("Contraseña", exact=True).fill(password)
-    page.get_by_role("button", name="Crear cuenta").click()
-    page.get_by_role("heading", name="Elige dónde jugar").wait_for()
+    page.get_by_label("Username", exact=True).fill(username)
+    page.get_by_label("Password", exact=True).fill(password)
+    page.get_by_role("button", name="Create account").click()
+    page.get_by_role("heading", name="Choose where to play").wait_for()
     page.locator("article").filter(
-        has=page.get_by_role("heading", name="Escritorio de prueba", exact=True)
-    ).get_by_role("button", name="Abrir instancia").click()
-    page.get_by_role("link", name="Conectar").wait_for(timeout=60000)
+        has=page.get_by_role("heading", name="Test desktop", exact=True)
+    ).get_by_role("button", name="Launch instance").click()
+    page.get_by_role("link", name="Connect").wait_for(timeout=60000)
     page.screenshot(path="/artifacts/library.png", full_page=True)
     with page.expect_popup() as popup:
-        page.get_by_role("link", name="Conectar").click()
+        page.get_by_role("link", name="Connect").click()
     desktop = popup.value
     closed = []
     desktop.on("websocket", lambda ws: ws.on("close", lambda: closed.append(True)))
@@ -79,7 +79,7 @@ with sync_playwright() as p:
         timeout=45000,
     )
     desktop.screenshot(path="/artifacts/desktop.png", full_page=True)
-    sid = page.get_by_role("link", name="Conectar").get_attribute("href").split("/")[2]
+    sid = page.get_by_role("link", name="Connect").get_attribute("href").split("/")[2]
     desktop.mouse.click(640, 300)
     desktop.keyboard.type("printf keyboard-ok > /data/browser-input.txt", delay=20)
     desktop.keyboard.press("Enter")
@@ -108,23 +108,23 @@ with sync_playwright() as p:
         raise AssertionError("Keyboard input did not reach the application")
     desktop.screenshot(path="/artifacts/desktop-input.png", full_page=True)
     before_logout = len(closed)
-    page.get_by_role("button", name="Salir", exact=True).click()
-    page.get_by_role("heading", name="Entra a tu biblioteca").wait_for()
+    page.get_by_role("button", name="Sign out", exact=True).click()
+    page.get_by_role("heading", name="Sign in to your library").wait_for()
     deadline = time.monotonic() + 5
     while time.monotonic() < deadline and len(closed) == before_logout:
         page.wait_for_timeout(100)
     assert len(closed) > before_logout, "Logout did not close the connected WebSocket"
     response = desktop.reload()
     assert response.status == 401, "Logged-out desktop remains accessible"
-    page.get_by_label("Usuario", exact=True).fill(username)
-    page.get_by_label("Contraseña", exact=True).fill(password)
-    page.get_by_role("button", name="Iniciar sesión", exact=True).click()
-    page.get_by_role("link", name="Conectar").wait_for()
+    page.get_by_label("Username", exact=True).fill(username)
+    page.get_by_label("Password", exact=True).fill(password)
+    page.get_by_role("button", name="Sign in", exact=True).click()
+    page.get_by_role("link", name="Connect").wait_for()
     page.on("dialog", lambda dialog: dialog.accept())
-    page.get_by_role("button", name="Terminar", exact=True).click()
-    page.get_by_text("Detenida", exact=False).wait_for()
-    page.get_by_role("button", name="Salir", exact=True).click()
-    page.get_by_role("heading", name="Entra a tu biblioteca").wait_for()
+    page.get_by_role("button", name="Stop", exact=True).click()
+    page.get_by_text("Stopped", exact=False).wait_for()
+    page.get_by_role("button", name="Sign out", exact=True).click()
+    page.get_by_role("heading", name="Sign in to your library").wait_for()
     page.set_viewport_size({"width": 390, "height": 844})
     page.screenshot(path="/artifacts/mobile.png", full_page=True)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (

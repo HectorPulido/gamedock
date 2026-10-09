@@ -16,42 +16,40 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page(viewport={"width": 1280, "height": 900})
     page.goto(url)
-    page.get_by_label("Usuario", exact=True).fill("admin")
-    page.get_by_label("Contraseña", exact=True).fill(password)
-    page.get_by_role("button", name="Iniciar sesión", exact=True).click()
-    page.get_by_text("Administración", exact=True).click()
-    page.locator("#settings").get_by_label("Nombre", exact=True).fill(
-        "GameDock Playroom"
+    page.get_by_label("Username", exact=True).fill("admin")
+    page.get_by_label("Password", exact=True).fill(password)
+    page.get_by_role("button", name="Sign in", exact=True).click()
+    page.get_by_text("Administration", exact=True).click()
+    page.locator("#settings").get_by_label("Name", exact=True).fill("GameDock Playroom")
+    page.locator("#settings").get_by_label("Banner / welcome message").fill(
+        "Independent desktops for your community."
     )
-    page.locator("#settings").get_by_label("Banner / mensaje de bienvenida").fill(
-        "Escritorios independientes para tu comunidad."
-    )
-    page.locator("#settings").get_by_label("Imagen del banner (URL opcional)").fill(
+    page.locator("#settings").get_by_label("Banner image (optional URL)").fill(
         url + "/assets/banner.svg"
     )
-    page.get_by_role("button", name="Guardar configuración").click()
-    page.get_by_text("Configuración guardada.", exact=True).wait_for()
+    page.get_by_role("button", name="Save settings").click()
+    page.get_by_text("Settings saved.", exact=True).wait_for()
     page.get_by_role("heading", name="GameDock Playroom", exact=True).wait_for()
     page.locator("#intro-banner").wait_for(state="visible")
     page.wait_for_function("document.querySelector('#intro-banner').naturalWidth > 0")
-    page.locator("#profile").get_by_label("Definición JSON").fill(
+    page.locator("#profile").get_by_label("JSON definition").fill(
         Path("examples/openttd/profile.json").read_text()
     )
-    page.get_by_role("button", name="Guardar juego", exact=True).click()
-    page.get_by_text("Juego guardado.", exact=True).wait_for()
+    page.get_by_role("button", name="Save game", exact=True).click()
+    page.get_by_text("Game saved.", exact=True).wait_for()
     page.get_by_role("heading", name="OpenTTD", exact=True).wait_for()
     page.screenshot(path="/artifacts/admin.png", full_page=True)
-    page.get_by_role("button", name="Salir", exact=True).click()
-    page.get_by_label("Usuario", exact=True).fill("game_" + secrets.token_hex(4))
-    page.get_by_label("Contraseña", exact=True).fill(secrets.token_urlsafe(20))
-    page.get_by_role("button", name="Crear cuenta", exact=True).click()
+    page.get_by_role("button", name="Sign out", exact=True).click()
+    page.get_by_label("Username", exact=True).fill("game_" + secrets.token_hex(4))
+    page.get_by_label("Password", exact=True).fill(secrets.token_urlsafe(20))
+    page.get_by_role("button", name="Create account", exact=True).click()
     page.get_by_role("heading", name="OpenTTD", exact=True).wait_for()
     page.locator("article").filter(
         has=page.get_by_role("heading", name="OpenTTD", exact=True)
-    ).get_by_role("button", name="Abrir instancia").click()
-    page.get_by_role("link", name="Conectar").wait_for(timeout=60000)
+    ).get_by_role("button", name="Launch instance").click()
+    page.get_by_role("link", name="Connect").wait_for(timeout=60000)
     with page.expect_popup() as popup:
-        page.get_by_role("link", name="Conectar").click()
+        page.get_by_role("link", name="Connect").click()
     desktop = popup.value
     failures = []
     desktop.on("pageerror", lambda e: failures.append(str(e)))
@@ -85,8 +83,8 @@ with sync_playwright() as p:
         print("Asset failures:", failures)
         print("Game viewer:", desktop.locator("body").inner_text()[:1000])
     page.on("dialog", lambda d: d.accept())
-    page.get_by_role("button", name="Terminar", exact=True).click()
-    page.get_by_text("Detenida", exact=False).wait_for()
+    page.get_by_role("button", name="Stop", exact=True).click()
+    page.get_by_text("Stopped", exact=False).wait_for()
     browser.close()
 print(
     "PASS: admin name/banner/profile forms, OpenTTD launch, rendered game over WebSocket, termination"

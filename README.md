@@ -1,99 +1,99 @@
 # GameDock
 
-Framework para ofrecer escritorios de juegos desde un navegador, extraído del
-harness de Starloco. Tiene cuentas y configuración independientes de Dofus.
+A framework for serving game desktops through a browser, extracted from the
+Starloco harness. Accounts and configuration are independent of Dofus.
 
-Incluye registro/login/logout, administrador inicial, catálogo editable, nombre y
-banner, resoluciones por juego, límites globales y por cuenta, habilitación de
-usuarios, cierre de instancias y CLI. Cada instancia ejecuta un comando en un
-contenedor propio. El portal autentica HTTP y WebSocket hacia Xpra; las sesiones
-no publican puertos al host.
+Includes registration, sign-in and sign-out, a bootstrap administrator, an editable
+game catalog, platform name and banners, per-game resolutions, global and per-user
+limits, account management, instance termination, and a CLI. Each instance runs a
+command in its own container. The portal authenticates HTTP and WebSocket access
+to Xpra; session containers do not publish ports to the host.
 
-## Primer inicio
+## Getting started
 
-Requisitos: servidor Linux con Docker Engine 26+ y Docker Compose. Arquitectura x86_64
-probada. No requiere Dofus, Wine ni Python en el host para servir la plataforma.
+Requirements: a Linux server with Docker Engine 26+ and Docker Compose. Tested on
+x86_64. Serving the platform does not require Dofus, Wine, or Python on the host.
 
 ```sh
 git clone git@github.com:HectorPulido/gamedock.git
 cd gamedock
 cp .env.example .env
-# Edita .env: ADMIN_PASSWORD debe tener al menos 12 caracteres.
+# Edit .env: ADMIN_PASSWORD must contain at least 12 characters.
 docker build -t gamedock-runtime:local runtime
 docker compose up -d --build
 ```
 
-Abre `http://localhost:8080` y entra con `ADMIN_USER` y `ADMIN_PASSWORD`. El
-administrador se crea en el primer arranque; cambiar `.env` no cambia contraseñas
-existentes. La biblioteca inicial incluye un escritorio con xterm para comprobar
-pantalla, teclado y ratón. En Administración puedes cambiar nombre, mensaje de
-bienvenida, registro, límites, perfiles y estado de las cuentas.
+Open `http://localhost:8080` and sign in with `ADMIN_USER` and `ADMIN_PASSWORD`.
+The administrator is created on the first startup; changing `.env` does not change
+existing passwords. The initial library includes an xterm desktop for testing
+display, keyboard, and mouse input. Use Administration to change the name, welcome
+message, banner image, registration policy, limits, game profiles, and account status.
 
-Para acceso remoto configura `PUBLIC_URL` con el origen HTTPS exacto y coloca un
-proxy HTTPS delante del portal, conservando rutas y query y permitiendo WebSocket
-(Upgrade/Connection). Las cookies usan Secure cuando PUBLIC_URL usa HTTPS. El
-portal se publica sólo en loopback por defecto. No publiques puertos de sesiones
-ni el socket Docker. Los administradores son operadores de confianza: eligen
-imágenes y comandos y el portal tiene acceso al daemon Docker.
+For remote access, set `PUBLIC_URL` to the exact public HTTPS origin and place an
+HTTPS proxy in front of the portal. Preserve paths and query strings and allow
+WebSocket upgrades (Upgrade/Connection). Cookies use Secure when `PUBLIC_URL` uses
+HTTPS. By default, the portal binds only to loopback. Do not expose session ports
+or the Docker socket. Administrators are trusted operators: they select images
+and commands, and the portal has access to the Docker daemon.
 
-## Lanzamiento con un comando
+## Launch an instance from the command line
 
-La CLI necesita Python 3 y no tiene dependencias adicionales.
+The CLI requires Python 3 and has no additional dependencies.
 
 ```sh
-python3 cli/gamedock.py --url http://localhost:8080 register jugador
-python3 cli/gamedock.py login jugador
+python3 cli/gamedock.py --url http://localhost:8080 register player
+python3 cli/gamedock.py login player
 python3 cli/gamedock.py launch desktop --resolution 1920x1080
 python3 cli/gamedock.py list
-python3 cli/gamedock.py stop ID_DE_INSTANCIA
+python3 cli/gamedock.py stop INSTANCE_ID
 python3 cli/gamedock.py logout
 ```
 
-`launch` imprime el ID y enlace al escritorio. Inicia sesión con la misma cuenta
-en el navegador para conectarte. La contraseña se solicita sin incluirla en
-argumentos. El token de CLI expira en 24 horas y se guarda con permisos 0600 en
-`~/.config/gamedock/session.json`. `GAMEDOCK_URL` o `--url` eligen el servidor;
-`--credentials` permite mantener sesiones separadas.
+`launch` prints the instance ID and desktop URL. Sign in to the browser with the
+same account to connect. Passwords are prompted for rather than passed as command
+arguments. CLI tokens expire after 24 hours and are stored with permissions 0600
+in `~/.config/gamedock/session.json`. Use `GAMEDOCK_URL` or `--url` to select the
+server and `--credentials` to maintain separate sessions.
 
-## Añadir un juego
+## Add a game
 
-Deriva una imagen de `gamedock-runtime:local`, instala el programa y mantén el
-usuario `player` (UID 1000). El directorio de trabajo es `/data`, persistente por
-cuenta y juego. Crea un perfil desde Administración o con la CLI como admin:
+Derive an image from `gamedock-runtime:local`, install the program, and keep the
+`player` user (UID 1000). The working directory is `/data`, persisted per account
+and game. Create a profile through Administration or the CLI as an administrator:
 
 ```json
 {
-  "id": "mi-juego",
-  "name": "Mi juego",
-  "description": "Un juego para tu comunidad",
+  "id": "my-game",
+  "name": "My game",
+  "description": "A game for your community",
   "banner": "https://example.com/banner.jpg",
-  "image": "mi-juego:local",
+  "image": "my-game:local",
   "command": ["/opt/game/start", "--server", "example.com"],
   "resolutions": ["1280x720", "1920x1080"],
-  "env": { "LANG": "es_ES.UTF-8" }
+  "env": { "LANG": "en_US.UTF-8" }
 }
 ```
 
 ```sh
-python3 cli/gamedock.py profile mi-juego.json
-python3 cli/gamedock.py launch mi-juego --resolution 1280x720
+python3 cli/gamedock.py profile my-game.json
+python3 cli/gamedock.py launch my-game --resolution 1280x720
 ```
 
-`command` es una lista de argumentos sin shell implícito. Si hace falta un shell,
-el administrador puede indicar `["sh", "-c", "comando explícito"]`. Construye o
-descarga la imagen en el servidor antes de lanzar: no se hacen pulls automáticos.
-El banner por juego es una URL HTTP(S) de imagen opcional; la plataforma permite
-mensaje de bienvenida e imagen de banner. Comandos, imágenes y variables de
-lanzamiento sólo son visibles al administrador. No
-uses las variables de perfiles para secretos individuales de usuarios.
+`command` is an argument list with no implicit shell interpretation. If a shell
+is needed, administrators can explicitly specify `["sh", "-c", "your command"]`.
+Build or pull the image on the server before launching; GameDock does not pull
+images automatically. Per-game banners are optional HTTP(S) image URLs. The
+platform supports a welcome message and a banner image. Launch commands, images,
+and environment variables are visible only to administrators. Do not use profile
+environment variables to store individual users' secrets.
 
-El runtime usa Xvfb, Openbox y Xpra sin audio. Sirve para programas X11 y juegos
-compatibles con renderizado de software. GPU, mandos, audio, anti-cheat y
-aceleración 3D requieren adaptar la imagen y dispositivos; no se garantiza
-compatibilidad con todos los juegos. Los límites iniciales por sesión son 4 GiB,
-2 CPU y 256 procesos, configurados en `server/app.py`.
+The runtime uses Xvfb, Openbox, and Xpra without audio. It supports X11 applications
+and games compatible with software rendering. GPU access, controllers, audio,
+anti-cheat, and 3D acceleration require adapting the image and device policy;
+compatibility with every game is not guaranteed. Default per-session limits are
+4 GiB of RAM, 2 CPUs, and 256 processes, configured in `server/app.py`.
 
-### Ejemplo listo para jugar: OpenTTD
+### Ready-to-play example: OpenTTD
 
 ```sh
 docker build -t gamedock-openttd:local examples/openttd
@@ -101,17 +101,18 @@ docker build -t gamedock-openttd:local examples/openttd
 ./bin/gamedock launch openttd --resolution 1280x720
 ```
 
-Incluye el juego libre y los gráficos OpenGFX desde los repositorios de Fedora.
-No necesita archivos de un cliente comercial. La configuración y partidas viven
-en `/data`. `./bin/gamedock` también acepta todos los comandos de la CLI anterior.
+Includes the free game and OpenGFX graphics from Fedora repositories, without
+requiring commercial client files. Configuration and saved games are stored in
+`/data`. `./bin/gamedock` accepts all CLI commands listed above.
 
-### Minecraft y Windows
+### Minecraft and Windows
 
-`examples/minecraft/` incluye imagen y perfil para un launcher Java Linux.
-Aporta tu cliente/launcher con librerías y recursos en
-`examples/minecraft/client/launcher.jar`. Debe abrir una interfaz gráfica y ser
-compatible con Java 21; adapta el comando si usa otro formato. No incluye cliente
-ni omite autenticación/licencia. No es un launcher oficial universal.
+`examples/minecraft/` provides an image and profile for a Linux Java launcher.
+Supply your client or launcher with its libraries and resources at
+`examples/minecraft/client/launcher.jar`. It must open a graphical interface and
+support Java 21; adapt the command if it uses a different format. No client is
+included, and authentication and licensing are not bypassed. This is not a
+universal official launcher configuration.
 
 ```sh
 docker build -t gamedock-minecraft:local examples/minecraft
@@ -119,85 +120,89 @@ python3 cli/gamedock.py profile examples/minecraft/profile.json
 python3 cli/gamedock.py launch minecraft --resolution 1280x720
 ```
 
-`examples/wine/` aporta un adaptador Windows: coloca los archivos del juego en
-`examples/wine/client/`, ajusta `Game.exe`, construye `gamedock-wine:local` e importa
-su `profile.json`. Conserva el prefijo Wine en `/data/wine`. La imagen histórica
-Dofus de `upstream/` es sólo referencia, no una dependencia ejecutable.
+`examples/wine/` provides a Windows adapter. Put the game files in
+`examples/wine/client/`, adjust `Game.exe`, build `gamedock-wine:local`, and import
+its `profile.json`. The Wine prefix is persisted at `/data/wine`. The historical
+Dofus image under `upstream/` is reference material, not an executable dependency.
 
-## Persistencia y operación
+## Persistence and operation
 
-- El volumen `gamedock_gamedock-data` guarda SQLite: cuentas, hashes scrypt,
-  tokens revocables, perfiles, configuración e historial.
-- `NAMESPACE-user-UID-JUEGO` guarda `/data`; el namespace es el nombre del proyecto
-  Compose por defecto (`gamedock`). `GAMEDOCK_NAMESPACE` permite fijarlo de forma
-  explícita con 1–40 letras minúsculas, números o guiones. Mantenlo estable y usa
-  nombres distintos para instalaciones que no deban compartir archivos.
-  Varias sesiones de la misma cuenta y
-  juego comparten archivos. Para juegos que bloquean su perfil usa límite por
-  usuario 1 o perfiles diferentes. Guarda antes de terminar; el cierre elimina
-  el contenedor pero conserva el volumen.
-- El estado se reconcilia con Docker al consultar/crear instancias. Reiniciar
-  el portal conserva escritorios y cuentas. Logout revoca la conexión, no mata
-  el juego. Desactivar una cuenta revoca tokens y termina sus instancias.
-- `docker compose logs -f portal` muestra errores. No imprime tokens ni claves.
-  Antes de retirar la plataforma termina las instancias desde Administración:
-  `docker compose down` sólo detiene el portal, no sus contenedores de sesiones.
-- Haz backup consistente de SQLite y volúmenes. No versiones `.env`, bases,
-  sesiones ni clientes de juegos. Los archivos de código y los builds están
-  completamente definidos por el repositorio.
+- The `gamedock_gamedock-data` volume stores SQLite data: accounts, scrypt password
+  hashes, revocable tokens, profiles, configuration, and instance history.
+- `NAMESPACE-user-UID-GAME` persists `/data`. The namespace defaults to the Compose
+  project name (`gamedock`). Set `GAMEDOCK_NAMESPACE` explicitly using 1–40 lowercase
+  letters, digits, underscores, or hyphens. Keep it stable and use distinct names
+  for deployments that must not share files. Multiple sessions for the same
+  account and game share files. For games that lock their profiles, set the
+  per-user limit to 1 or use separate profiles. Save before stopping an instance:
+  stopping removes the container but preserves its volume.
+- State is reconciled with Docker when listing or creating instances. Recreating
+  the portal preserves desktops and accounts. Signing out revokes desktop access
+  without terminating the game. Disabling an account revokes its tokens and
+  terminates its instances.
+- `docker compose logs -f portal` shows operational errors without printing tokens
+  or passwords. Stop instances through Administration before removing the
+  platform: `docker compose down` stops the portal, not its session containers.
+- Back up SQLite consistently along with game volumes. Do not commit `.env`,
+  databases, tokens, or game clients. Source files and build instructions are
+  fully defined by the repository.
 
 ## API
 
-Mutaciones: `Content-Type: application/json`; usa `{}` si no llevan datos.
-Autenticación: cookie HttpOnly o `Authorization: Bearer TOKEN`. No uses tokens en
-URLs. Las instancias ajenas responden 404; el administrador puede gestionarlas.
+Mutations require `Content-Type: application/json`; send `{}` for requests with no
+fields. Authenticate with an HttpOnly cookie or `Authorization: Bearer TOKEN`.
+Do not put tokens in URLs. Other users' instances return 404; administrators can
+manage all instances.
 
-| Método     | Ruta                                    | Uso                                     |
+| Method     | Route                                   | Purpose                                 |
 | ---------- | --------------------------------------- | --------------------------------------- |
-| GET        | `/api/catalog`                          | Configuración pública, cuenta y juegos  |
+| GET        | `/api/catalog`                          | Public settings, account, and games     |
 | POST       | `/api/auth/register`, `/api/auth/login` | `{username, password}`                  |
-| POST       | `/api/logout`                           | Revocar sesión actual                   |
-| GET / POST | `/api/instances`                        | Listar / crear con `{game, resolution}` |
-| DELETE     | `/api/instances/ID`                     | Terminar instancia                      |
-| GET / WS   | `/desktop/ID/…`                         | Escritorio autenticado                  |
-| PUT        | `/api/admin/settings`                   | Nombre, banner, registro, límites       |
-| PUT        | `/api/admin/games`                      | Crear/reemplazar perfil                 |
-| DELETE     | `/api/admin/games/ID`                   | Quitar perfil                           |
-| GET        | `/api/admin/users`                      | Cuentas                                 |
+| POST       | `/api/logout`                           | Revoke the current session              |
+| GET / POST | `/api/instances`                        | List / create with `{game, resolution}` |
+| DELETE     | `/api/instances/ID`                     | Stop an instance                        |
+| GET / WS   | `/desktop/ID/…`                         | Authenticated desktop access            |
+| PUT        | `/api/admin/settings`                   | Name, banners, registration, limits     |
+| PUT        | `/api/admin/games`                      | Create or replace a profile             |
+| DELETE     | `/api/admin/games/ID`                   | Remove a profile                        |
+| GET        | `/api/admin/users`                      | List accounts                           |
 | PATCH      | `/api/admin/users/ID`                   | `{enabled: true/false}`                 |
 
-## Validación
+## Validation
 
-Para ejecutar la suite completa en Linux, usando sólo el proyecto QA de Docker:
+Run the complete suite on Linux using only the dedicated Docker QA project:
 
 ```sh
 ./scripts/qa.sh
 ```
 
-Necesita Python 3 y Docker Compose con `--wait`, conserva credenciales QA fuera
-del repositorio y deja capturas en `/tmp/gamedock-artifacts`. Comprueba también
-que recrear el portal no reinicia los juegos y que los volúmenes sobreviven al
-reemplazo de instancias. Ejecuta las pruebas del navegador secuencialmente, en
-una red Docker estable; no uses la red del host mientras creas redes de sesiones.
+Requires Python 3 and Docker Compose with `--wait`. QA credentials remain outside
+the repository, and screenshots are written to `/tmp/gamedock-artifacts`. The
+suite verifies that recreating the portal does not restart games and that volumes
+survive instance replacement. Run browser tests sequentially on a stable Docker
+network; do not use host networking while creating session networks.
 
 ```sh
 docker build -t gamedock-portal:local .
 docker run --rm -v "$PWD:/app:ro" gamedock-portal:local python -m unittest discover -s tests -v
 ```
 
-`tests/live.py` comprueba API/CLI, comando nativo, dos escritorios reales,
-resoluciones Xvfb, persistencia, proxy, aislamiento y puertos. Se ejecuta en el host
-con Python 3 y CLI Docker contra un despliegue QA desechable en localhost:18088;
-lee el bootstrap de `/tmp/gamedock-qa.env`. No lo uses contra cuentas reales.
-`tests/browser.py` prueba registro, lanzamiento, píxeles del escritorio, entrada
-real de teclado, revocación WebSocket, cierre y móvil. `tests/game_browser.py`
-verifica los formularios de administración, el banner de imagen y OpenTTD real.
-Construye su entorno con `tests/Dockerfile.browser`; escribe capturas en
-`/artifacts`. El portal QA usa `PUBLIC_URL=http://gamedock-qa-portal-1:8080` y el
-navegador recibe ese origen mediante `QA_URL`; la CLI QA accede por loopback:18088.
+`tests/live.py` checks the API and CLI, native commands, two real desktops, Xvfb
+resolutions, persistence, proxying, isolation, and port exposure. Run it on the
+host with Python 3 and the Docker CLI against a disposable QA deployment at
+localhost:18088. It reads bootstrap credentials from `/tmp/gamedock-qa.env`.
+Do not run it against real accounts. `tests/browser.py` checks registration,
+launching, rendered desktop pixels, real keyboard input, WebSocket revocation,
+termination, and mobile layout. `tests/game_browser.py` checks administration
+forms, the banner image, and a real OpenTTD session. Build the browser environment
+with `tests/Dockerfile.browser`; screenshots are written to `/artifacts`. The QA
+portal uses `PUBLIC_URL=http://gamedock-qa-portal-1:8080`, passed to the browser as
+`QA_URL`; the QA CLI connects through loopback:18088.
 
-## Procedencia
+## Provenance
 
-`upstream/` contiene código extraído de `HectorPulido/starloco-private`;
-`upstream/REVISION` identifica el commit. No se modificó ni reinició Dofus para
-esta extracción. El framework funciona sin acceder a sus servicios o base de datos.
+`upstream/` contains reference code extracted from `HectorPulido/starloco-private`.
+`upstream/REVISION` identifies the original source commit. Reference messages and
+default language settings have since been translated to English; the files are
+not byte-for-byte copies of that revision. The extraction did not modify or
+restart Dofus. The framework runs without accessing Dofus services or databases.

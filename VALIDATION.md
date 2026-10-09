@@ -1,36 +1,38 @@
-# Validación de GameDock
+# GameDock validation
 
-Suite completa ejecutada el 9 de octubre de 2026 en `hector-server`, Linux x86_64,
-Docker 29.8.2. Proyecto Compose independiente `gamedock-qa`.
+The complete suite ran on October 9, 2026, on `hector-server`, Linux x86_64,
+Docker 29.8.2, using the independent `gamedock-qa` Compose project.
 
-| Requisito | Evidencia ejecutada |
-|---|---|
-| Registro, login y logout | 4 pruebas API y Chromium: creación de cuenta, login posterior, token revocado y WebSocket cerrado al salir |
-| Asignación a un usuario | API rechaza consultar/terminar escritorios ajenos; el usuario normal sólo lista sus instancias |
-| Abrir con un comando | CLI registra una cuenta y lanza el perfil nativo; el comando configurado crea un archivo dentro del contenedor |
-| Escritorios independientes | Dos contenedores simultáneos con redes separadas; conexión directa entre redes rechazada; ningún puerto de sesión publicado |
-| Resolución | `xdpyinfo` dentro de ambas instancias verifica 1280×720 y 1920×1080 |
-| Nombres y banners | Chromium guarda nombre, mensaje e imagen desde Administración; verifica que la imagen se carga |
-| Administración básica | API prueba permisos, registro cerrado, límites, desactivación de cuenta, revocación de tokens y cierre de instancias; Chromium edita perfiles |
-| Conexión real | Chromium espera píxeles renderizados, escribe un comando mediante teclado y verifica el archivo resultante usando Docker |
-| Juegos | OpenTTD + OpenGFX construidos desde el repositorio; menú real renderizado a través de Xpra/WebSocket y cierre desde el portal |
-| Persistencia | Recreación del portal conserva token, cuenta y PID del juego; reemplazo de instancia conserva un marcador en el volumen |
-| Instalaciones separadas | Prueba Docker confirma volúmenes con namespace `gamedock-qa`; despliegue limpio independiente usa `gamedock-cleancheck-user-2-desktop` |
-| Interfaz móvil | Captura a 390 px y comprobación de ausencia de desbordamiento horizontal |
+| Requirement                         | Executed evidence                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Registration, sign-in, and sign-out | Four API tests and Chromium: account creation, subsequent sign-in, token revocation, and WebSocket closure on sign-out                      |
+| User ownership                      | API rejects access to or termination of other users' desktops; regular users list only their own instances                                  |
+| Command-line launch                 | CLI registers an account and launches the native profile; the configured command creates a file inside the container                        |
+| Independent desktops                | Two concurrent containers on separate networks; direct cross-network connections rejected; no session ports published                       |
+| Resolution                          | `xdpyinfo` inside both instances confirms 1280×720 and 1920×1080                                                                            |
+| Names and banners                   | Chromium saves the name, message, and image through Administration and verifies image loading                                               |
+| Basic administration                | API checks permissions, closed registration, limits, account disabling, token revocation, and instance termination; Chromium edits profiles |
+| Real connection                     | Chromium waits for rendered pixels, types a command through the keyboard, and verifies the resulting file through Docker                    |
+| Games                               | OpenTTD and OpenGFX built from the repository; real menu rendered through Xpra/WebSocket and terminated through the portal                  |
+| Persistence                         | Portal recreation preserves the token, account, and game PID; replacing an instance preserves a marker in its volume                        |
+| Separate deployments                | Docker tests confirm volumes under the `gamedock-qa` namespace; an independent clean deployment uses `gamedock-cleancheck-user-2-desktop`   |
+| Mobile interface                    | Screenshot at 390 px and a check for horizontal overflow                                                                                    |
 
-Ejecutar `./scripts/qa.sh` reproduce la suite y genera capturas en
-`/tmp/gamedock-artifacts`. El resultado final fue `QA passed`.
+Run `./scripts/qa.sh` to reproduce the suite and generate screenshots under
+`/tmp/gamedock-artifacts`. The final result was `QA passed`.
 
-Tras añadir namespaces se repitió la prueba real de Docker/CLI y persistencia.
-Además, un clon Git limpio del commit `f34ddc6` construyó runtime y portal,
-desplegó un proyecto Compose independiente con una base vacía, creó administrador
-y usuario y sirvió un escritorio Xpra autenticado. El árbol Git del clon siguió
-limpio. No se copiaron bases de datos, clientes ni archivos `.runtime`.
+After adding namespaces, the real Docker/CLI and persistence tests were repeated.
+A clean Git clone of commit `f34ddc6` also built the runtime and portal, deployed
+an independent Compose project with an empty database, created an administrator
+and user, and served an authenticated Xpra desktop. The clone's Git working tree
+remained clean. No databases, game clients, or `.runtime` files were copied.
 
-Minecraft y Wine se entregan como adaptadores configurables; no se distribuyen
-clientes comerciales ni se afirma haber probado esos clientes. El runtime base
-usa renderizado de software, sin audio ni acceso a GPU. Los requisitos propios
-de cada juego se resuelven en su imagen y perfil, como describe el README.
+Minecraft and Wine are provided as configurable adapters. Commercial clients are
+not distributed, and no claim is made that those clients have been tested. The
+base runtime uses software rendering without audio or GPU access. Each game's
+specific requirements belong in its image and profile, as described in the README.
 
-La extracción no modificó ni reinició Dofus. Su código original se conserva como
-referencia no ejecutable en `upstream/`, con el commit de origen registrado.
+The extraction did not modify or restart Dofus. Its original code is retained as
+non-executable reference material under `upstream/`, with the original revision
+recorded. Reference messages and default language settings were later translated
+to English; consult the recorded source revision for the unmodified originals.

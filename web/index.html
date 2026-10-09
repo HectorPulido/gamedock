@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -18,9 +18,9 @@
     <main>
       <section class="intro">
         <div>
-          <p class="caption">Biblioteca de juegos</p>
-          <h1 id="headline">Tu próximo escritorio.</h1>
-          <p id="banner">Tu biblioteca. Tu escritorio. Listo para jugar.</p>
+          <p class="caption">Game library</p>
+          <h1 id="headline">Your next desktop.</h1>
+          <p id="banner">Your library. Your desktop. Ready to play.</p>
         </div>
         <img id="intro-banner" class="intro-banner" alt="" hidden />
         <div class="desktop-art" aria-hidden="true">
@@ -28,15 +28,15 @@
             <i></i><i></i><i></i>
             <div>▶</div>
           </div>
-          <span>Un espacio para cada jugador</span>
+          <span>A space for every player</span>
         </div>
       </section>
       <p id="notice" role="status" aria-live="polite"></p>
       <section id="auth">
         <form id="auth-form">
-          <h2>Entra a tu biblioteca</h2>
+          <h2>Sign in to your library</h2>
           <label
-            >Usuario<input
+            >Username<input
               name="username"
               autocomplete="username"
               required
@@ -44,7 +44,7 @@
               maxlength="32"
               pattern="[a-zA-Z0-9_-]+" /></label
           ><label
-            >Contraseña<input
+            >Password<input
               type="password"
               name="password"
               autocomplete="current-password"
@@ -53,86 +53,84 @@
               required
           /></label>
           <div class="actions">
-            <button type="submit">Iniciar sesión</button
+            <button type="submit">Sign in</button
             ><button type="button" id="register" class="secondary">
-              Crear cuenta
+              Create account
             </button>
           </div>
         </form>
         <p>
-          Abre un juego y vuelve a él desde tu navegador. Cada cuenta conserva
-          sus propios archivos.
+          Launch a game and return to it from your browser. Each account keeps
+          its own files.
         </p>
       </section>
       <section id="library" hidden>
         <div class="section-title">
-          <h2>Elige dónde jugar</h2>
-          <button id="refresh" class="secondary">Actualizar instancias</button>
+          <h2>Choose where to play</h2>
+          <button id="refresh" class="secondary">Refresh instances</button>
         </div>
         <div id="games" class="games"></div>
-        <h2>Tus instancias</h2>
+        <h2>Your instances</h2>
         <div id="instances"></div>
       </section>
       <section id="admin" hidden>
         <details>
-          <summary>Administración</summary>
+          <summary>Administration</summary>
           <div class="admin-grid">
             <form id="settings">
-              <h3>Tu plataforma</h3>
-              <label>Nombre<input name="name" maxlength="80" required /></label
+              <h3>Your platform</h3>
+              <label>Name<input name="name" maxlength="80" required /></label
               ><label
-                >Banner / mensaje de bienvenida<textarea
+                >Banner / welcome message<textarea
                   name="banner"
                   maxlength="500"
                 ></textarea></label
               ><label
-                >Imagen del banner (URL opcional)<input
+                >Banner image (optional URL)<input
                   type="url"
                   name="banner_image"
                   maxlength="1000" /></label
               ><label class="check"
-                ><input type="checkbox" name="registration" />Permitir crear
-                cuentas</label
+                ><input type="checkbox" name="registration" />Allow account
+                registration</label
               ><label
-                >Instancias simultáneas<input
+                >Concurrent instances<input
                   name="max_instances"
                   type="number"
                   min="1"
                   max="100"
                   required /></label
               ><label
-                >Instancias por usuario<input
+                >Instances per user<input
                   name="per_user"
                   type="number"
                   min="1"
                   max="100"
                   required /></label
-              ><button>Guardar configuración</button>
+              ><button>Save settings</button>
             </form>
             <form id="profile">
-              <h3>Perfil de juego</h3>
+              <h3>Game profile</h3>
               <p>
-                Define la imagen instalada, el comando y las resoluciones
-                disponibles.
+                Set the installed image, launch command, and available
+                resolutions.
               </p>
               <label
-                >Definición JSON<textarea
+                >JSON definition<textarea
                   name="definition"
                   rows="15"
                   spellcheck="false"
                   required
                 ></textarea></label
-              ><button>Guardar juego</button>
+              ><button>Save game</button>
               <p id="profile-help"></p>
             </form>
           </div>
-          <h3>Cuentas</h3>
+          <h3>Accounts</h3>
           <div id="users"></div>
         </details>
       </section>
     </main>
-    <footer>
-      GameDock <span>Escritorios de juegos bajo tu control.</span>
-    </footer>
+    <footer>GameDock <span>Game desktops under your control.</span></footer>
   </body>
 </html>

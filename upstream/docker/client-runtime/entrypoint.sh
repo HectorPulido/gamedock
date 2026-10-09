@@ -22,7 +22,7 @@ export XPRA_SOCKET_CORK="${XPRA_SOCKET_CORK:-0}"
 : "${AUTOLOGIN_PASSWORD:=}"
 : "${AUTOLOGIN_SERVER_SLOT:=1}"
 : "${AUTOLOGIN_CHARACTER_SLOT:=0}"
-: "${DEFAULT_LANGUAGE:=es}"
+: "${DEFAULT_LANGUAGE:=en}"
 : "${HERO_LAUNCHES_B64:=}"
 
 client_dir=/opt/starloco/client

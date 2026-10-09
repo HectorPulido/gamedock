@@ -56,14 +56,14 @@ if args.action in ("login", "register"):
     result = request(
         "/auth/" + args.action,
         "POST",
-        {"username": args.username, "password": getpass.getpass("Contraseña: ")},
+        {"username": args.username, "password": getpass.getpass("Password: ")},
     )
     credentials.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(credentials, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     os.fchmod(descriptor, 0o600)
     with os.fdopen(descriptor, "w") as output:
         json.dump({"url": url, "token": result["token"]}, output)
-    print("Sesión iniciada como " + result["user"]["username"])
+    print("Signed in as " + result["user"]["username"])
 elif args.action == "launch":
     body = {"game": args.game}
     if args.resolution:
@@ -75,7 +75,7 @@ elif args.action == "stop":
 elif args.action == "logout":
     request("/logout", "POST", {})
     credentials.unlink(missing_ok=True)
-    print("Sesión cerrada")
+    print("Signed out")
 elif args.action == "profile":
     print(
         json.dumps(

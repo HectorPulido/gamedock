@@ -25,34 +25,34 @@ def password_hash(password, salt=None):
 
 def validate_profile(data):
     if not isinstance(data, dict):
-        raise ValueError("Perfil inválido")
+        raise ValueError("Invalid profile")
     for key in ("id", "name", "image"):
         if (
             not isinstance(data.get(key), str)
             or not data[key].strip()
             or len(data[key]) > 200
         ):
-            raise ValueError("Falta " + key)
+            raise ValueError("Missing " + key)
     if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", data["id"]):
-        raise ValueError("ID de juego inválido")
+        raise ValueError("Invalid game ID")
     command = data.get("command")
     if (
         not isinstance(command, list)
         or not 1 <= len(command) <= 64
         or any(not isinstance(x, str) or "\x00" in x or len(x) > 4096 for x in command)
     ):
-        raise ValueError("El comando debe ser una lista de argumentos")
+        raise ValueError("The command must be a list of arguments")
     resolutions = data.get("resolutions", ["1280x720"])
     if not isinstance(resolutions, list) or not 1 <= len(resolutions) <= 12:
-        raise ValueError("Resoluciones inválidas")
+        raise ValueError("Invalid resolutions")
     for resolution in resolutions:
         if not isinstance(resolution, str) or not re.fullmatch(
             r"\d{3,4}x\d{3,4}", resolution
         ):
-            raise ValueError("Resolución inválida")
+            raise ValueError("Invalid resolution")
         w, h = map(int, resolution.split("x"))
         if not (640 <= w <= 3840 and 480 <= h <= 2160):
-            raise ValueError("Resolución fuera de rango")
+            raise ValueError("Resolution out of range")
     env = data.get("env", {})
     if (
         not isinstance(env, dict)
@@ -65,23 +65,23 @@ def validate_profile(data):
             for k, v in env.items()
         )
     ):
-        raise ValueError("Variables inválidas")
+        raise ValueError("Invalid environment variables")
     if any(
         k in env for k in ("DISPLAY", "XDG_RUNTIME_DIR", "GAMEDOCK_RESOLUTION", "HOME")
     ):
-        raise ValueError("Variable reservada")
+        raise ValueError("Reserved environment variable")
     if (
         not isinstance(data.get("description", ""), str)
         or len(data.get("description", "")) > 2000
     ):
-        raise ValueError("Descripción inválida")
+        raise ValueError("Invalid description")
     banner = data.get("banner", "")
     if (
         not isinstance(banner, str)
         or len(banner) > 1000
         or (banner and not re.match(r"^https?://", banner))
     ):
-        raise ValueError("Banner: usa una URL HTTP(S)")
+        raise ValueError("Banner: use an HTTP(S) URL")
     return {
         k: data.get(k, default)
         for k, default in [
@@ -102,7 +102,7 @@ class Docker:
         self.namespace = os.getenv("GAMEDOCK_NAMESPACE", "gamedock")
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", self.namespace):
             raise RuntimeError(
-                "GAMEDOCK_NAMESPACE: usa de 1 a 40 letras minúsculas, números o guiones"
+                "GAMEDOCK_NAMESPACE: use 1 to 40 lowercase letters, digits, underscores, or hyphens"
             )
         self.portal = os.getenv("PORTAL_CONTAINER", os.getenv("HOSTNAME", ""))
         self.http = None
@@ -214,16 +214,16 @@ async def security(request, handler):
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("Origin")
             if origin and origin != request.app["origin"]:
-                raise web.HTTPForbidden(text="Origen inválido")
+                raise web.HTTPForbidden(text="Invalid origin")
             if (
                 request.path.startswith("/api/")
                 and request.content_type != "application/json"
             ):
-                raise web.HTTPUnsupportedMediaType(text="Se requiere JSON")
+                raise web.HTTPUnsupportedMediaType(text="JSON is required")
             if request.path.startswith("/api/") and not isinstance(
                 await request.json(), dict
             ):
-                raise ValueError("Se requiere un objeto JSON")
+                raise ValueError("A JSON object is required")
         token = request.cookies.get("gamedock", "")
         if request.headers.get("Authorization", "").startswith("Bearer "):
             token = request.headers["Authorization"][7:]
@@ -248,7 +248,8 @@ async def security(request, handler):
     except (RuntimeError, aiohttp.ClientError, asyncio.TimeoutError):
         request.app["logger"].exception("Runtime unavailable")
         response = web.json_response(
-            {"error": "El servicio de escritorios no respondió. Reintenta."}, status=503
+            {"error": "The desktop service did not respond. Please try again."},
+            status=503,
         )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "same-origin"
@@ -261,9 +262,9 @@ async def security(request, handler):
 def user(request, admin=False):
     u = request["user"]
     if not u:
-        raise web.HTTPUnauthorized(text="Inicia sesión")
+        raise web.HTTPUnauthorized(text="Sign in")
     if admin and not u["admin"]:
-        raise web.HTTPForbidden(text="Se requiere administrador")
+        raise web.HTTPForbidden(text="Administrator access is required")
     return u
 
 
@@ -311,9 +312,7 @@ async def auth(request):
     attempts = app["attempts"]
     attempts[key] = [t for t in attempts.get(key, []) if t > now - 60]
     if len(attempts[key]) >= 15:
-        raise web.HTTPTooManyRequests(
-            text="Espera un minuto antes de volver a intentar"
-        )
+        raise web.HTTPTooManyRequests(text="Wait a minute before trying again")
     attempts[key].append(now)
     if len(attempts) > 10000:
         for peer in list(attempts):
@@ -324,20 +323,20 @@ async def auth(request):
     if not isinstance(username, str) or not re.fullmatch(
         r"[a-zA-Z0-9_-]{3,32}", username
     ):
-        raise ValueError("Usuario: de 3 a 32 letras, números, guiones o guiones bajos")
+        raise ValueError("Username: 3 to 32 letters, digits, hyphens, or underscores")
     username = username.lower()
     if not isinstance(password, str) or not 10 <= len(password) <= 256:
-        raise ValueError("Contraseña: de 10 a 256 caracteres")
+        raise ValueError("Password: 10 to 256 characters")
     if request.match_info["action"] == "register":
         if not config(app)["registration"]:
-            raise web.HTTPForbidden(text="El registro está cerrado")
+            raise web.HTTPForbidden(text="Registration is closed")
         hashed = await asyncio.to_thread(password_hash, password)
         try:
             app["db"].execute(
                 "INSERT INTO users(username,password) VALUES (?,?)", (username, hashed)
             )
         except sqlite3.IntegrityError:
-            raise web.HTTPConflict(text="Ese usuario ya existe")
+            raise web.HTTPConflict(text="That username already exists")
     row = (
         app["db"]
         .execute("SELECT * FROM users WHERE username=?", (username,))
@@ -346,7 +345,7 @@ async def auth(request):
     expected = row["password"] if row else app["dummy_hash"]
     hashed = await asyncio.to_thread(password_hash, password, expected.split(":")[0])
     if not hmac.compare_digest(hashed, expected) or not row or not row["enabled"]:
-        raise web.HTTPUnauthorized(text="Credenciales inválidas")
+        raise web.HTTPUnauthorized(text="Invalid credentials")
     token = secrets.token_urlsafe(32)
     app["db"].execute("DELETE FROM tokens WHERE expires<=?", (now,))
     app["db"].execute(
@@ -378,14 +377,14 @@ def owned(request):
     u = user(request)
     sid = request.match_info["sid"]
     if not re.fullmatch(r"[a-f0-9]{32}", sid):
-        raise web.HTTPNotFound(text="Instancia inexistente")
+        raise web.HTTPNotFound(text="Instance not found")
     row = (
         request.app["db"]
         .execute("SELECT * FROM instances WHERE id=?", (sid,))
         .fetchone()
     )
     if not row or (row["uid"] != u["id"] and not u["admin"]):
-        raise web.HTTPNotFound(text="Instancia inexistente")
+        raise web.HTTPNotFound(text="Instance not found")
     return dict(row)
 
 
@@ -424,7 +423,7 @@ async def instances(request):
             .execute("SELECT 1 FROM users WHERE id=? AND enabled=1", (u["id"],))
             .fetchone()
         ):
-            raise web.HTTPForbidden(text="Cuenta desactivada")
+            raise web.HTTPForbidden(text="Account disabled")
         cfg = config(app)
         # Reconcile before enforcing limits; stopped containers don't consume slots.
         for row in (
@@ -455,18 +454,18 @@ async def instances(request):
             .fetchone()[0]
         )
         if count >= cfg["max_instances"] or own >= cfg["per_user"]:
-            raise web.HTTPConflict(text="Se alcanzó el límite de instancias")
+            raise web.HTTPConflict(text="The instance limit has been reached")
         row = (
             app["db"]
             .execute("SELECT definition FROM games WHERE id=?", (body.get("game"),))
             .fetchone()
         )
         if not row:
-            raise ValueError("Juego inexistente")
+            raise ValueError("Game not found")
         profile = json.loads(row[0])
         resolution = body.get("resolution", profile["resolutions"][0])
         if resolution not in profile["resolutions"]:
-            raise ValueError("Resolución no permitida")
+            raise ValueError("Resolution not allowed")
         sid = secrets.token_hex(16)
         app["db"].execute(
             "INSERT INTO instances VALUES (?,?,?,?,?,?)",
@@ -501,10 +500,10 @@ async def admin_settings(request):
             if not isinstance(body[field], str) or len(body[field]) > (
                 80 if field == "name" else 500
             ):
-                raise ValueError("Configuración inválida")
+                raise ValueError("Invalid settings")
             cfg[field] = body[field]
     if not cfg["name"].strip():
-        raise ValueError("El nombre no puede estar vacío")
+        raise ValueError("The name cannot be empty")
     if "banner_image" in body:
         image = body["banner_image"]
         if (
@@ -512,16 +511,16 @@ async def admin_settings(request):
             or len(image) > 1000
             or (image and not re.match(r"^https?://", image))
         ):
-            raise ValueError("Imagen de banner: usa una URL HTTP(S)")
+            raise ValueError("Banner image: use an HTTP(S) URL")
         cfg["banner_image"] = image
     if "registration" in body:
         if not isinstance(body["registration"], bool):
-            raise ValueError("Registro inválido")
+            raise ValueError("Invalid registration setting")
         cfg["registration"] = body["registration"]
     for field in ("max_instances", "per_user"):
         if field in body:
             if type(body[field]) is not int or not 1 <= body[field] <= 100:
-                raise ValueError("Límite inválido")
+                raise ValueError("Invalid limit")
             cfg[field] = body[field]
     request.app["db"].execute(
         "UPDATE settings SET value=? WHERE id=1", (json.dumps(cfg),)
@@ -555,10 +554,10 @@ async def admin_users(request):
         )
     uid = int(request.match_info["uid"])
     if uid == current["id"]:
-        raise ValueError("No puedes desactivar tu propia cuenta")
+        raise ValueError("You cannot disable your own account")
     body = await request.json()
     if type(body.get("enabled")) is not bool:
-        raise ValueError("Estado inválido")
+        raise ValueError("Invalid status")
     async with request.app["launch_lock"]:
         request.app["db"].execute(
             "UPDATE users SET enabled=? WHERE id=?", (int(body["enabled"]), uid)
@@ -584,19 +583,19 @@ async def proxy(request):
     instance = owned(request)
     origin = request.headers.get("Origin")
     if origin and origin != request.app["origin"]:
-        raise web.HTTPForbidden(text="Origen inválido")
+        raise web.HTTPForbidden(text="Invalid origin")
     if instance["status"] != "running":
-        raise web.HTTPConflict(text="Instancia detenida")
+        raise web.HTTPConflict(text="Instance stopped")
     info = await request.app["docker"].inspect(instance["id"])
     if not info or not info["State"]["Running"]:
-        raise web.HTTPGone(text="El escritorio terminó")
+        raise web.HTTPGone(text="The desktop has stopped")
     await request.app["docker"].ensure_connection(instance["id"])
     # Resolve only the container's network address; never accept a client-supplied target.
     network = info["NetworkSettings"]["Networks"].get(
         "gamedock-session-" + instance["id"]
     )
     if not network or not network["IPAddress"]:
-        raise web.HTTPServiceUnavailable(text="El escritorio aún no está listo")
+        raise web.HTTPServiceUnavailable(text="The desktop is not ready yet")
     from yarl import URL
 
     tail = request.match_info.get("tail", "")
@@ -694,7 +693,7 @@ async def proxy(request):
             status=503,
             content_type="text/html",
             headers={"Cache-Control": "no-store"},
-            text="""<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2"><title>Iniciando escritorio</title><link rel="stylesheet" href="/assets/style.css"><main style="padding-top:12vh"><h1>Iniciando tu escritorio.</h1><p>Se abrirá automáticamente en unos segundos.</p><a href="/">Volver a la biblioteca</a></main></html>""",
+            text="""<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="2"><title>Starting desktop</title><link rel="stylesheet" href="/assets/style.css"><main style="padding-top:12vh"><h1>Starting your desktop.</h1><p>It will open automatically in a few seconds.</p><a href="/">Back to the library</a></main></html>""",
         )
 
 
@@ -738,7 +737,7 @@ def create_app(db_path=None, docker=None):
             json.dumps(
                 {
                     "name": "GameDock",
-                    "banner": "Tu biblioteca. Tu escritorio. Listo para jugar.",
+                    "banner": "Your library. Your desktop. Ready to play.",
                     "registration": True,
                     "max_instances": 8,
                     "per_user": 2,
@@ -750,11 +749,11 @@ def create_app(db_path=None, docker=None):
         password = os.getenv("ADMIN_PASSWORD", "")
         if len(password) < 12:
             raise RuntimeError(
-                "Define ADMIN_PASSWORD con al menos 12 caracteres antes del primer inicio"
+                "Set ADMIN_PASSWORD to at least 12 characters before the first startup"
             )
         username = os.getenv("ADMIN_USER", "admin").lower()
         if not re.fullmatch(r"[a-z0-9_-]{3,32}", username):
-            raise RuntimeError("ADMIN_USER inválido")
+            raise RuntimeError("Invalid ADMIN_USER")
         db.execute(
             "INSERT INTO users(username,password,admin) VALUES (?,?,1)",
             (username, password_hash(password)),
@@ -763,11 +762,11 @@ def create_app(db_path=None, docker=None):
         profile = validate_profile(
             {
                 "id": "desktop",
-                "name": "Escritorio de prueba",
+                "name": "Test desktop",
                 "image": "gamedock-runtime:local",
                 "command": ["xterm"],
                 "resolutions": ["1280x720", "1920x1080"],
-                "description": "Un escritorio aislado para comprobar conexión, teclado y resolución.",
+                "description": "An isolated desktop for testing the connection, keyboard, and resolution.",
             }
         )
         db.execute(

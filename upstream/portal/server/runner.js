@@ -52,7 +52,7 @@ function consumeExecStream(stream, { collect = false, timeoutMs = 20_000, maximu
       if (!collect) return;
       const text = chunk.toString();
       if (Buffer.byteLength(output) + Buffer.byteLength(text) > maximumBytes) {
-        finish(new Error("La respuesta del cliente excedió el límite permitido."));
+        finish(new Error("The client response exceeded the allowed size."));
         stream.destroy();
         return;
       }
@@ -61,7 +61,7 @@ function consumeExecStream(stream, { collect = false, timeoutMs = 20_000, maximu
     const onError = error => finish(error);
     const onEnd = () => finish();
     const timer = setTimeout(() => {
-      finish(new Error("El cliente no respondió a tiempo."));
+      finish(new Error("The client did not respond in time."));
       stream.destroy();
     }, timeoutMs);
     timer.unref?.();
@@ -76,7 +76,7 @@ function consumeExecStream(stream, { collect = false, timeoutMs = 20_000, maximu
 app.post("/sessions", async (request, reply) => {
   const definition = validateSessionDefinition(request.body);
   if (!definition)
-    return reply.code(400).send({ error: "Definición de sesión inválida." });
+    return reply.code(400).send({ error: "Invalid session definition." });
   const { sessionId, masterAccountId, launches } = definition;
   const containerName = nameFor(sessionId);
   await removeIfExists(find(sessionId));
@@ -86,7 +86,7 @@ app.post("/sessions", async (request, reply) => {
     container = await docker.createContainer({
       name: containerName, Image: image,
       Env: [
-        "LOGIN_HOST=login", "LOGIN_PORT=450", "XPRA_PORT=6084", "DEFAULT_LANGUAGE=es",
+        "LOGIN_HOST=login", "LOGIN_PORT=450", "XPRA_PORT=6084", "DEFAULT_LANGUAGE=en",
         `HERO_LAUNCHES_B64=${Buffer.from(JSON.stringify(launches)).toString("base64url")}`,
       ],
       Labels: { "org.starloco.managed": "true", "org.starloco.session": sessionId, "org.starloco.master": String(masterAccountId) },
@@ -105,41 +105,41 @@ app.post("/sessions", async (request, reply) => {
 });
 
 app.get("/sessions/:id", async (request, reply) => {
-  if (!validSessionId(request.params.id)) return { status: "failed", message: "Identificador de sesión inválido" };
+  if (!validSessionId(request.params.id)) return { status: "failed", message: "Invalid session ID" };
   try {
     const container = await find(request.params.id), info = await container.inspect();
     const containerName = nameFor(request.params.id);
     if (!info?.State?.Running) return { status: "failed", containerName,
-      message: info?.State?.Error || `El cliente terminó con código ${info?.State?.ExitCode ?? "desconocido"}` };
+      message: info?.State?.Error || `The client exited with code ${info?.State?.ExitCode ?? "unknown"}` };
     const check = await container.exec({ Cmd: ["/usr/local/bin/starloco-client-control", "status"], AttachStdout: true, AttachStderr: true });
     const stream = await check.start({ hijack: true, stdin: false });
     const output = await consumeExecStream(stream, { collect: true });
     const result = await check.inspect();
     if (result.ExitCode !== 0 || output.includes("FAILED")) {
       return { status: "failed", containerName,
-        message: output.replace(/^.*FAILED:\s*/s, "").trim() || "El cliente perdió una ventana de juego" };
+        message: output.replace(/^.*FAILED:\s*/s, "").trim() || "The client lost a game window" };
     }
     return { status: output.includes("READY") ? "ready" : "starting", containerName,
-      message: "Iniciando los clientes seleccionados" };
+      message: "Starting the selected clients" };
   } catch (error) {
     request.log.warn({ error, sessionId: request.params.id }, "Could not inspect session container");
     if (Number(error?.statusCode) === 404) {
-      return { status: "failed", message: "El contenedor de la sesión ya no existe" };
+      return { status: "failed", message: "The session container no longer exists" };
     }
     // A Docker daemon timeout is not proof that the game client died. Let the
     // portal retry on the next heartbeat instead of persisting a false failure.
-    return reply.code(503).send({ status: "unavailable", message: "Docker no respondió temporalmente" });
+    return reply.code(503).send({ status: "unavailable", message: "Docker is temporarily unavailable" });
   }
 });
 
 app.post("/sessions/:id/focus", async (request, reply) => {
-  if (!validSessionId(request.params.id)) return reply.code(400).send({ error: "Sesión inválida." });
-  const playerId = Number(request.body?.playerId); if (!Number.isSafeInteger(playerId) || playerId <= 0) return reply.code(400).send({ error: "Personaje inválido." });
+  if (!validSessionId(request.params.id)) return reply.code(400).send({ error: "Invalid session." });
+  const playerId = Number(request.body?.playerId); if (!Number.isSafeInteger(playerId) || playerId <= 0) return reply.code(400).send({ error: "Invalid character." });
   const exec = await (await find(request.params.id)).exec({ Cmd: ["/usr/local/bin/starloco-client-control", "focus", String(playerId)], AttachStdout: true, AttachStderr: true });
   const stream = await exec.start({ hijack: true, stdin: false });
   await consumeExecStream(stream);
   const result = await exec.inspect();
-  if (result.ExitCode !== 0) return reply.code(409).send({ error: "No se pudo enfocar el personaje." });
+  if (result.ExitCode !== 0) return reply.code(409).send({ error: "Could not focus the character." });
   return { ok: true };
 });
 
@@ -174,7 +174,7 @@ app.post("/services/game/restart", async (request, reply) => {
       ],
     },
   });
-  if (containers.length !== 1) return reply.code(409).send({ error: "No se encontró un único contenedor de juego." });
+  if (containers.length !== 1) return reply.code(409).send({ error: "Could not find a unique game container." });
   await docker.getContainer(containers[0].Id).restart({ t: 30 });
   return { restarted: containers[0].Names?.[0]?.replace(/^\//, "") || containers[0].Id.slice(0, 12) };
 });

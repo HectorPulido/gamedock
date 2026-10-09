@@ -2,7 +2,7 @@ const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 const LAUNCH_TICKET = /^LT-[A-Za-z0-9_-]{32}$/;
 const configuredHeroLimit = Number(process.env.MAX_ACTIVE_HEROES ?? 6);
 if (!Number.isInteger(configuredHeroLimit) || configuredHeroLimit < 1 || configuredHeroLimit > 6) {
-  throw new Error("MAX_ACTIVE_HEROES tiene un valor inválido.");
+  throw new Error("MAX_ACTIVE_HEROES has an invalid value.");
 }
 export const ACTIVE_HERO_LIMIT = configuredHeroLimit;
 
