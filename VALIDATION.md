@@ -27,6 +27,14 @@ an independent Compose project with an empty database, created an administrator
 and user, and served an authenticated Xpra desktop. The clone's Git working tree
 remained clean. No databases, game clients, or `.runtime` files were copied.
 
+The local demo was also built from repository sources on macOS ARM64 using
+OrbStack. `./scripts/start-local.sh` completed successfully and was repeated
+without replacing credentials or data. All five API tests passed, followed by
+native Chromium tests covering registration, login, rendered desktop pixels,
+actual keyboard input, logout revocation, instance termination, mobile layout,
+administration forms, and a rendered OpenTTD session. Initial credentials remain
+in the ignored local `.env`; no remote images or application data were copied.
+
 Minecraft and Wine are provided as configurable adapters. Commercial clients are
 not distributed, and no claim is made that those clients have been tested. The
 base runtime uses software rendering without audio or GPU access. Each game's
