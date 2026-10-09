@@ -15,6 +15,13 @@ URL = os.getenv("QA_URL", "http://localhost:18088")
 
 
 def api(path, method="GET", body=None, token="", expected=200):
+    if path == "/auth/register" and body is not None and "invite" not in body:
+        body = {
+            **body,
+            "invite": api("/admin/invitations", "POST", {}, admin, expected=201)[
+                "code"
+            ],
+        }
     headers = {"Authorization": "Bearer " + token}
     if body is not None:
         headers["Content-Type"] = "application/json"
@@ -36,7 +43,9 @@ def api(path, method="GET", body=None, token="", expected=200):
 
 admin_password = next(
     line.split("=", 1)[1]
-    for line in Path("/tmp/gamedock-qa.env").read_text().splitlines()
+    for line in Path(os.getenv("QA_ENV_FILE", "/tmp/gamedock-qa.env"))
+    .read_text()
+    .splitlines()
     if line.startswith("ADMIN_PASSWORD=")
 )
 admin = api("/auth/login", "POST", {"username": "admin", "password": admin_password})[
@@ -65,6 +74,7 @@ profile = {
     ],
     "resolutions": ["1280x720", "1920x1080"],
     "env": {},
+    "max_per_user": 2,
 }
 api("/admin/games", "PUT", profile, admin)
 other = api(
@@ -79,7 +89,13 @@ with tempfile.TemporaryDirectory() as directory:
     credentials = str(Path(directory) / "session.json")
     cli = ["python3", "cli/gamedock.py", "--url", URL, "--credentials", credentials]
     result = subprocess.run(
-        cli + ["register", "cli_" + secrets.token_hex(3)],
+        cli
+        + [
+            "register",
+            "cli_" + secrets.token_hex(3),
+            "--invite",
+            api("/admin/invitations", "POST", {}, admin, expected=201)["code"],
+        ],
         input=secrets.token_urlsafe(20) + "\n",
         text=True,
         capture_output=True,
@@ -90,8 +106,14 @@ with tempfile.TemporaryDirectory() as directory:
     ids = []
     try:
         for resolution in profile["resolutions"]:
+            api(
+                "/admin/games",
+                "PUT",
+                {**profile, "default_resolution": resolution},
+                admin,
+            )
             result = subprocess.run(
-                cli + ["launch", "qa-native", "--resolution", resolution],
+                cli + ["launch", "qa-native"],
                 text=True,
                 capture_output=True,
             )
@@ -156,9 +178,9 @@ with tempfile.TemporaryDirectory() as directory:
             )[0]
             assert not info["HostConfig"]["PortBindings"], "Session port exposed"
             assert info["Config"]["User"] == "player"
-            assert info["Mounts"][0]["Name"].startswith("gamedock-qa-user-"), (
-                "Volume is not scoped to the QA deployment"
-            )
+            assert info["Mounts"][0]["Name"].startswith(
+                os.getenv("QA_PROJECT", "gamedock-qa") + "-user-"
+            ), "Volume is not scoped to the QA deployment"
             assert list(info["NetworkSettings"]["Networks"]) == [
                 "gamedock-session-" + sid
             ]
@@ -193,15 +215,15 @@ with tempfile.TemporaryDirectory() as directory:
                     "docker",
                     "compose",
                     "-p",
-                    "gamedock-qa",
+                    os.getenv("QA_PROJECT", "gamedock-qa"),
                     "--env-file",
-                    "/tmp/gamedock-qa.env",
+                    os.getenv("QA_ENV_FILE", "/tmp/gamedock-qa.env"),
                     "up",
                     "-d",
                     "--force-recreate",
                     "--no-build",
                 ],
-                env={**os.environ, "PORT": "18088"},
+                env={**os.environ, "PORT": os.getenv("QA_PORT", "18088")},
                 check=True,
                 capture_output=True,
             )

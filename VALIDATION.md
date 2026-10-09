@@ -44,3 +44,29 @@ The extraction did not modify or restart Dofus. Its original code is retained as
 non-executable reference material under `upstream/`, with the original revision
 recorded. Reference messages and default language settings were later translated
 to English; consult the recorded source revision for the unmodified originals.
+
+## Player controls and access policies
+
+The October 9, 2026 update was checked in the isolated `gamedock-features` Docker
+project on macOS ARM64, separate from the user's local demonstration data:
+
+- Twelve API tests cover invitation expiry, revocation, use limits and concurrent
+  redemption; registration mode; role permissions; game quotas and player
+  resolution enforcement; activity ownership; inactivity cleanup; toolbar
+  settings; and migration of the previous database schema.
+- Chromium verifies automatic same-tab launch, centered and scaled game frames,
+  actual keyboard input, previous-instance navigation, logout revocation, hidden
+  stopped instances, and mobile layout.
+- Chromium adds OpenTTD using the structured Add game form, creates and redeems an
+  invitation, changes the toolbar setting for a running viewer, edits account
+  limits, and stops the rendered game.
+- The real Docker/CLI suite checks administrator-selected player resolutions,
+  persistent volumes, container isolation, cross-account denial, and portal
+  recreation without restarting games.
+- The real background worker stops an idle Docker instance after a configured
+  one-minute timeout plus the next 15-second sweep.
+
+The network probe found that OrbStack permits sibling traffic between ordinary
+Docker bridges. Session networks are now internal by default; the repeat isolation
+check passed. Internet access is an explicit game profile option and requires a
+native Linux Docker host for sibling isolation, as documented in the README.

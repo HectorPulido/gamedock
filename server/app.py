@@ -7,13 +7,14 @@ import re
 import secrets
 import sqlite3
 import time
+import contextlib
 from pathlib import Path
 
 import aiohttp
 from aiohttp import web
 
 ROOT = Path(__file__).resolve().parent.parent
-# Show Xpra's floating controls by default. Set False for a clean game view.
+# Initial defaults; administrators can change these without rebuilding.
 DESKTOP_TOOLBAR = True
 
 
@@ -84,6 +85,18 @@ def validate_profile(data):
         or (banner and not re.match(r"^https?://", banner))
     ):
         raise ValueError("Banner: use an HTTP(S) URL")
+    default_resolution = data.get("default_resolution", resolutions[0])
+    if default_resolution not in resolutions:
+        raise ValueError("Default resolution must be one of the available resolutions")
+    if type(data.get("internet_access", False)) is not bool:
+        raise ValueError("Invalid internet access setting")
+    if type(data.get("enabled", True)) is not bool:
+        raise ValueError("Invalid game availability")
+    if (
+        type(data.get("max_per_user", 1)) is not int
+        or not 0 <= data.get("max_per_user", 1) <= 100
+    ):
+        raise ValueError("Game instance limit must be between 0 and 100")
     return {
         k: data.get(k, default)
         for k, default in [
@@ -95,6 +108,10 @@ def validate_profile(data):
             ("env", {}),
             ("description", ""),
             ("banner", ""),
+            ("default_resolution", default_resolution),
+            ("max_per_user", 1),
+            ("enabled", True),
+            ("internet_access", False),
         ]
     }
 
@@ -156,6 +173,7 @@ class Docker:
                     "Name": session_network,
                     "CheckDuplicate": True,
                     "Driver": "bridge",
+                    "Internal": not profile.get("internet_access", False),
                     "Labels": {
                         "io.gamedock.managed": "true",
                         "io.gamedock.session": sid,
@@ -271,8 +289,32 @@ def user(request, admin=False):
 
 
 def config(app):
-    return json.loads(
-        app["db"].execute("SELECT value FROM settings WHERE id=1").fetchone()[0]
+    return {
+        "desktop_toolbar": DESKTOP_TOOLBAR,
+        "invite_required": True,
+        "idle_minutes": 30,
+        **json.loads(
+            app["db"].execute("SELECT value FROM settings WHERE id=1").fetchone()[0]
+        ),
+    }
+
+
+def policy(app, uid):
+    row = (
+        app["db"]
+        .execute("SELECT definition FROM user_policies WHERE uid=?", (uid,))
+        .fetchone()
+    )
+    return json.loads(row[0]) if row else {"max_instances": None, "games": None}
+
+
+def game_limit(app, u, game):
+    if u["admin"]:
+        return 100
+    grants = policy(app, u["id"])["games"]
+    return min(
+        game.get("max_per_user", 1),
+        grants.get(game["id"], 0) if grants is not None else 100,
     )
 
 
@@ -296,12 +338,17 @@ async def catalog(request):
         games = [
             {k: v for k, v in g.items() if k not in ("env", "command", "image")}
             for g in games
+            if g.get("enabled", True)
+            and game_limit(request.app, request["user"], g) > 0
         ]
     return web.json_response(
         {
             "settings": cfg,
             "user": public_user(request["user"]) if request["user"] else None,
             "games": games,
+            "policy": policy(request.app, request["user"]["id"])
+            if request["user"]
+            else None,
         }
     )
 
@@ -332,13 +379,32 @@ async def auth(request):
     if request.match_info["action"] == "register":
         if not config(app)["registration"]:
             raise web.HTTPForbidden(text="Registration is closed")
+        invitation = body.get("invite", "")
+        if not isinstance(invitation, str) or len(invitation) > 128:
+            raise ValueError("Invalid invitation code")
         hashed = await asyncio.to_thread(password_hash, password)
         try:
+            app["db"].execute("BEGIN IMMEDIATE")
+            if config(app)["invite_required"]:
+                digest = hashlib.sha256(invitation.strip().encode()).hexdigest()
+                result = app["db"].execute(
+                    "UPDATE invitations SET uses=uses+1 WHERE digest=? AND revoked=0 AND uses<max_uses AND (expires IS NULL OR expires>?)",
+                    (digest, time.time()),
+                )
+                if result.rowcount != 1:
+                    raise web.HTTPForbidden(
+                        text="An invitation code is required or the code has expired"
+                    )
             app["db"].execute(
                 "INSERT INTO users(username,password) VALUES (?,?)", (username, hashed)
             )
+            app["db"].execute("COMMIT")
         except sqlite3.IntegrityError:
+            app["db"].execute("ROLLBACK")
             raise web.HTTPConflict(text="That username already exists")
+        except Exception:
+            app["db"].execute("ROLLBACK")
+            raise
     row = (
         app["db"]
         .execute("SELECT * FROM users WHERE username=?", (username,))
@@ -394,30 +460,31 @@ async def instances(request):
     u = user(request)
     app = request.app
     if request.method == "GET":
-        rows = (
-            app["db"]
-            .execute(
-                "SELECT * FROM instances WHERE uid=? OR ?=1 ORDER BY created DESC",
-                (u["id"], u["admin"]),
+        async with app["launch_lock"]:
+            rows = (
+                app["db"]
+                .execute(
+                    "SELECT * FROM instances WHERE uid=? OR ?=1 ORDER BY created DESC",
+                    (u["id"], u["admin"]),
+                )
+                .fetchall()
             )
-            .fetchall()
-        )
-        result = []
-        for row in rows:
-            item = dict(row)
-            if item["status"] in ("running", "starting"):
-                info = await app["docker"].inspect(item["id"])
-                item["status"] = (
-                    "running" if info and info["State"]["Running"] else "stopped"
-                )
-                if info and not info["State"]["Running"]:
-                    await app["docker"].stop(item["id"])
-                app["db"].execute(
-                    "UPDATE instances SET status=? WHERE id=?",
-                    (item["status"], item["id"]),
-                )
-            result.append(item)
-        return web.json_response(result)
+            result = []
+            for row in rows:
+                item = dict(row)
+                if item["status"] in ("running", "starting"):
+                    info = await app["docker"].inspect(item["id"])
+                    item["status"] = (
+                        "running" if info and info["State"]["Running"] else "stopped"
+                    )
+                    if info and not info["State"]["Running"]:
+                        await app["docker"].stop(item["id"])
+                    app["db"].execute(
+                        "UPDATE instances SET status=? WHERE id=?",
+                        (item["status"], item["id"]),
+                    )
+                result.append(item)
+            return web.json_response(result)
     body = await request.json()
     async with app["launch_lock"]:
         if (
@@ -455,7 +522,11 @@ async def instances(request):
             )
             .fetchone()[0]
         )
-        if count >= cfg["max_instances"] or own >= cfg["per_user"]:
+        user_limit = policy(app, u["id"])["max_instances"]
+        if count >= cfg["max_instances"] or own >= min(
+            cfg["per_user"],
+            user_limit if user_limit is not None and not u["admin"] else 100,
+        ):
             raise web.HTTPConflict(text="The instance limit has been reached")
         row = (
             app["db"]
@@ -465,13 +536,41 @@ async def instances(request):
         if not row:
             raise ValueError("Game not found")
         profile = json.loads(row[0])
-        resolution = body.get("resolution", profile["resolutions"][0])
+        limit = game_limit(app, u, profile)
+        if not u["admin"] and (not profile.get("enabled", True) or limit <= 0):
+            raise web.HTTPForbidden(text="You do not have access to this game")
+        game_count = (
+            app["db"]
+            .execute(
+                "SELECT count(*) FROM instances WHERE uid=? AND game=? AND status IN ('starting','running')",
+                (u["id"], profile["id"]),
+            )
+            .fetchone()[0]
+        )
+        if game_count >= limit:
+            raise web.HTTPConflict(
+                text="The instance limit for this game has been reached"
+            )
+        default_resolution = profile.get(
+            "default_resolution", profile["resolutions"][0]
+        )
+        resolution = body.get("resolution", default_resolution)
+        if not u["admin"] and resolution != default_resolution:
+            raise web.HTTPForbidden(text="Only administrators can choose a resolution")
         if resolution not in profile["resolutions"]:
             raise ValueError("Resolution not allowed")
         sid = secrets.token_hex(16)
         app["db"].execute(
-            "INSERT INTO instances VALUES (?,?,?,?,?,?)",
-            (sid, u["id"], profile["id"], resolution, "starting", time.time()),
+            "INSERT INTO instances(id,uid,game,resolution,status,created,last_activity) VALUES (?,?,?,?,?,?,?)",
+            (
+                sid,
+                u["id"],
+                profile["id"],
+                resolution,
+                "starting",
+                time.time(),
+                time.time(),
+            ),
         )
         try:
             await app["docker"].start(sid, u["id"], profile, resolution)
@@ -480,16 +579,17 @@ async def instances(request):
             raise
         app["db"].execute("UPDATE instances SET status='running' WHERE id=?", (sid,))
     return web.json_response(
-        {"id": sid, "url": "/desktop/" + sid + "/", "status": "running"}, status=201
+        {"id": sid, "url": "/play/" + sid, "status": "running"}, status=201
     )
 
 
 async def terminate(request):
     instance = owned(request)
-    await request.app["docker"].stop(instance["id"])
-    request.app["db"].execute(
-        "UPDATE instances SET status='stopped' WHERE id=?", (instance["id"],)
-    )
+    async with request.app["launch_lock"]:
+        await request.app["docker"].stop(instance["id"])
+        request.app["db"].execute(
+            "UPDATE instances SET status='stopped' WHERE id=?", (instance["id"],)
+        )
     return web.json_response({"ok": True})
 
 
@@ -515,10 +615,18 @@ async def admin_settings(request):
         ):
             raise ValueError("Banner image: use an HTTP(S) URL")
         cfg["banner_image"] = image
-    if "registration" in body:
-        if not isinstance(body["registration"], bool):
-            raise ValueError("Invalid registration setting")
-        cfg["registration"] = body["registration"]
+    for field in ("registration", "desktop_toolbar", "invite_required"):
+        if field in body:
+            if type(body[field]) is not bool:
+                raise ValueError("Invalid " + field)
+            cfg[field] = body[field]
+    if "idle_minutes" in body:
+        if (
+            type(body["idle_minutes"]) is not int
+            or not 0 <= body["idle_minutes"] <= 1440
+        ):
+            raise ValueError("Inactivity timeout must be between 0 and 1440 minutes")
+        cfg["idle_minutes"] = body["idle_minutes"]
     for field in ("max_instances", "per_user"):
         if field in body:
             if type(body[field]) is not int or not 1 <= body[field] <= 100:
@@ -550,14 +658,52 @@ async def admin_users(request):
     if request.method == "GET":
         return web.json_response(
             [
-                public_user(r)
+                {**public_user(r), "policy": policy(request.app, r["id"])}
                 for r in request.app["db"].execute("SELECT * FROM users ORDER BY id")
             ]
         )
     uid = int(request.match_info["uid"])
+    body = await request.json()
+    if (
+        not request.app["db"]
+        .execute("SELECT 1 FROM users WHERE id=?", (uid,))
+        .fetchone()
+    ):
+        raise web.HTTPNotFound(text="Account not found")
+    if "policy" in body:
+        value = body["policy"]
+        if not isinstance(value, dict):
+            raise ValueError("Invalid account limits")
+        maximum, games = value.get("max_instances"), value.get("games")
+        if maximum is not None and (
+            type(maximum) is not int or not 0 <= maximum <= 100
+        ):
+            raise ValueError("Account limit must be between 0 and 100")
+        if games is not None and (
+            not isinstance(games, dict)
+            or any(
+                not isinstance(k, str)
+                or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,39}", k)
+                or type(v) is not int
+                or not 0 <= v <= 100
+                for k, v in games.items()
+            )
+        ):
+            raise ValueError("Invalid game allowances")
+        if games is not None and any(
+            not request.app["db"]
+            .execute("SELECT 1 FROM games WHERE id=?", (k,))
+            .fetchone()
+            for k in games
+        ):
+            raise ValueError("Unknown game in account limits")
+        request.app["db"].execute(
+            "INSERT OR REPLACE INTO user_policies VALUES (?,?)",
+            (uid, json.dumps({"max_instances": maximum, "games": games})),
+        )
+        return web.json_response({"ok": True})
     if uid == current["id"]:
         raise ValueError("You cannot disable your own account")
-    body = await request.json()
     if type(body.get("enabled")) is not bool:
         raise ValueError("Invalid status")
     async with request.app["launch_lock"]:
@@ -590,15 +736,21 @@ async def proxy(request):
         raise web.HTTPConflict(text="Instance stopped")
     if (
         request.match_info.get("tail", "") in ("", "index.html")
-        and "floating_menu" not in request.query
+        and request.query.get("floating_menu")
+        != ("true" if config(request.app)["desktop_toolbar"] else "false")
         and request.headers.get("Upgrade", "").lower() != "websocket"
     ):
-        return web.HTTPFound(
-            location=str(
-                request.rel_url.update_query(
-                    floating_menu="true" if DESKTOP_TOOLBAR else "false"
+        return web.Response(
+            status=302,
+            headers={
+                "Location": str(
+                    request.rel_url.update_query(
+                        floating_menu="true"
+                        if config(request.app)["desktop_toolbar"]
+                        else "false"
+                    )
                 )
-            )
+            },
         )
     info = await request.app["docker"].inspect(instance["id"])
     if not info or not info["State"]["Running"]:
@@ -711,6 +863,101 @@ async def proxy(request):
         )
 
 
+async def player(request):
+    instance = owned(request)
+    if instance["status"] != "running":
+        return web.Response(status=302, headers={"Location": "/"})
+    return web.FileResponse(ROOT / "web/player.html")
+
+
+async def instance_details(request):
+    return web.json_response(owned(request))
+
+
+async def activity(request):
+    instance = owned(request)
+    if instance["status"] != "running":
+        raise web.HTTPConflict(text="Instance stopped")
+    async with request.app["launch_lock"]:
+        request.app["db"].execute(
+            "UPDATE instances SET last_activity=? WHERE id=? AND status='running'",
+            (time.time(), instance["id"]),
+        )
+    return web.json_response({"ok": True})
+
+
+async def expire_idle(app, now=None):
+    minutes = config(app)["idle_minutes"]
+    if not minutes:
+        return
+    async with app["launch_lock"]:
+        for row in (
+            app["db"]
+            .execute(
+                "SELECT id FROM instances WHERE status='running' AND last_activity<=?",
+                ((time.time() if now is None else now) - minutes * 60,),
+            )
+            .fetchall()
+        ):
+            await app["docker"].stop(row["id"])
+            app["db"].execute(
+                "UPDATE instances SET status='stopped' WHERE id=?", (row["id"],)
+            )
+
+
+async def idle_worker(app):
+    while True:
+        await asyncio.sleep(15)
+        try:
+            await expire_idle(app)
+        except Exception:
+            app["logger"].exception("Inactivity cleanup failed; retrying")
+
+
+async def invitations(request):
+    user(request, True)
+    db = request.app["db"]
+    if request.method == "GET":
+        return web.json_response(
+            [
+                dict(row)
+                for row in db.execute(
+                    "SELECT id,label,max_uses,uses,expires,revoked FROM invitations ORDER BY rowid DESC"
+                )
+            ]
+        )
+    if request.method == "DELETE":
+        db.execute(
+            "UPDATE invitations SET revoked=1 WHERE id=?", (request.match_info["iid"],)
+        )
+        return web.json_response({"ok": True})
+    body = await request.json()
+    label, uses, days = (
+        body.get("label", ""),
+        body.get("max_uses", 1),
+        body.get("expires_days", 7),
+    )
+    if not isinstance(label, str) or len(label) > 100:
+        raise ValueError("Invitation label must be at most 100 characters")
+    if type(uses) is not int or not 1 <= uses <= 1000:
+        raise ValueError("Invitation uses must be between 1 and 1000")
+    if type(days) is not int or not 1 <= days <= 365:
+        raise ValueError("Invitation validity must be between 1 and 365 days")
+    code = secrets.token_urlsafe(24)
+    iid = secrets.token_hex(16)
+    db.execute(
+        "INSERT INTO invitations(id,digest,label,max_uses,expires) VALUES (?,?,?,?,?)",
+        (
+            iid,
+            hashlib.sha256(code.encode()).hexdigest(),
+            label,
+            uses,
+            time.time() + days * 86400,
+        ),
+    )
+    return web.json_response({"id": iid, "code": code}, status=201)
+
+
 async def lifecycle(app):
     app["http"] = aiohttp.ClientSession(
         timeout=aiohttp.ClientTimeout(total=30), auto_decompress=False
@@ -721,7 +968,11 @@ async def lifecycle(app):
         ),
         timeout=aiohttp.ClientTimeout(total=45),
     )
+    cleanup = asyncio.create_task(idle_worker(app))
     yield
+    cleanup.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await cleanup
     await app["http"].close()
     await app["docker"].http.close()
     app["db"].close()
@@ -739,11 +990,22 @@ def create_app(db_path=None, docker=None):
     db = sqlite3.connect(path, isolation_level=None)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
-    db.executescript("""CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, admin INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1);
+    db.executescript(
+        """CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL, admin INTEGER NOT NULL DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS tokens(digest TEXT PRIMARY KEY,uid INTEGER NOT NULL,expires REAL NOT NULL);
     CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY,value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS games(id TEXT PRIMARY KEY,definition TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS instances(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,game TEXT NOT NULL,resolution TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL);""")
+    CREATE TABLE IF NOT EXISTS instances(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,game TEXT NOT NULL,resolution TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL);"""
+    )
+    db.executescript("""CREATE TABLE IF NOT EXISTS user_policies(uid INTEGER PRIMARY KEY,definition TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY,digest TEXT UNIQUE NOT NULL,label TEXT NOT NULL,max_uses INTEGER NOT NULL,uses INTEGER NOT NULL DEFAULT 0,expires REAL,revoked INTEGER NOT NULL DEFAULT 0);""")
+    if "last_activity" not in {
+        row[1] for row in db.execute("PRAGMA table_info(instances)")
+    }:
+        db.execute(
+            "ALTER TABLE instances ADD COLUMN last_activity REAL NOT NULL DEFAULT 0"
+        )
+        db.execute("UPDATE instances SET last_activity=?", (time.time(),))
     fresh = not db.execute("SELECT 1 FROM settings").fetchone()
     db.execute(
         "INSERT OR IGNORE INTO settings VALUES (1,?)",
@@ -796,6 +1058,12 @@ def create_app(db_path=None, docker=None):
     app.router.add_get("/api/instances", instances)
     app.router.add_post("/api/instances", instances)
     app.router.add_delete("/api/instances/{sid}", terminate)
+    app.router.add_get("/play/{sid}", player)
+    app.router.add_post("/api/instances/{sid}/activity", activity)
+    app.router.add_get("/api/instances/{sid}", instance_details)
+    app.router.add_get("/api/admin/invitations", invitations)
+    app.router.add_post("/api/admin/invitations", invitations)
+    app.router.add_delete("/api/admin/invitations/{iid}", invitations)
     app.router.add_put("/api/admin/settings", admin_settings)
     app.router.add_put("/api/admin/games", admin_games)
     app.router.add_delete("/api/admin/games/{game}", admin_games)

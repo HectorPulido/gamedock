@@ -16,7 +16,12 @@ parser.add_argument(
 )
 sub = parser.add_subparsers(dest="action", required=True)
 for name in ("login", "register"):
-    sub.add_parser(name).add_argument("username")
+    command = sub.add_parser(name)
+    command.add_argument("username")
+    if name == "register":
+        command.add_argument(
+            "--invite", default="", help="Invitation code supplied by an administrator"
+        )
 launch = sub.add_parser("launch")
 launch.add_argument("game")
 launch.add_argument("--resolution")
@@ -56,7 +61,11 @@ if args.action in ("login", "register"):
     result = request(
         "/auth/" + args.action,
         "POST",
-        {"username": args.username, "password": getpass.getpass("Password: ")},
+        {
+            "username": args.username,
+            "password": getpass.getpass("Password: "),
+            **({"invite": args.invite} if args.action == "register" else {}),
+        },
     )
     credentials.parent.mkdir(parents=True, exist_ok=True)
     descriptor = os.open(credentials, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)

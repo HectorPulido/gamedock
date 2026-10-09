@@ -357,3 +357,49 @@ footer span {
     max-height: 180px;
   }
 }
+
+.help {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #45648b;
+}
+.advanced {
+  margin: 18px 0;
+  border: 0;
+  padding: 0;
+}
+.advanced summary {
+  font-size: 15px;
+}
+#add-game {
+  margin-top: 10px;
+}
+#invitation-form {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+#invitation-form label {
+  flex: 1;
+  min-width: 150px;
+}
+#invitation-form button {
+  margin-bottom: 17px;
+}
+#invitation-result code {
+  user-select: all;
+  overflow-wrap: anywhere;
+  background: white;
+  padding: 8px;
+}
+.account-policy {
+  max-width: 550px;
+  padding-bottom: 20px;
+}
+.account {
+  border-bottom: 1px solid var(--line);
+}
+.account .user-row {
+  border: 0;
+}

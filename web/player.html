@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>GameDock desktop</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <link rel="stylesheet" href="/assets/player.css" />
+    <script src="/assets/player.js" defer></script>
+  </head>
+  <body class="player">
+    <header class="player-header">
+      <a class="brand" id="brand" href="/">GameDock</a>
+      <nav id="session-tabs" aria-label="Running instances"></nav>
+      <div class="player-actions">
+        <button id="previous" class="secondary" disabled>
+          Previous instance</button
+        ><a class="button secondary" href="/">Back to library</a
+        ><button id="stop-instance" class="danger">Stop instance</button>
+      </div>
+    </header>
+    <p id="player-notice" role="status" aria-live="polite"></p>
+    <main id="desktop-stage">
+      <iframe
+        id="desktop-frame"
+        title="Game desktop"
+        allow="fullscreen; clipboard-read; clipboard-write"
+        allowfullscreen
+      ></iframe>
+    </main>
+  </body>
+</html>

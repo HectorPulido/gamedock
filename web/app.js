@@ -1,5 +1,6 @@
 const $ = (s) => document.querySelector(s);
 let state;
+let profileEditing = false;
 function node(tag, text, className) {
   const el = document.createElement(tag);
   if (text) el.textContent = text;
@@ -60,6 +61,9 @@ async function load() {
   $("#library").hidden = !state.user;
   $("#admin").hidden = !state.user?.admin;
   $("#register").hidden = !state.settings.registration;
+  $("#invite-field").hidden =
+    !state.settings.registration || !state.settings.invite_required;
+  $("#add-game").hidden = !state.user?.admin;
   $("#identity").replaceChildren();
   if (!state.user) return;
   $("#identity").append(node("span", state.user.username + " "));
@@ -79,22 +83,13 @@ async function load() {
       "banner_image",
       "max_instances",
       "per_user",
+      "idle_minutes",
     ])
       $("#settings").elements[key].value = state.settings[key] ?? "";
-    $("#settings").elements.registration.checked = state.settings.registration;
-    $("#profile").elements.definition.value = JSON.stringify(
-      {
-        id: "my-game",
-        name: "My game",
-        image: "my-game:local",
-        command: ["/opt/game/start"],
-        resolutions: ["1280x720", "1920x1080"],
-        env: {},
-        description: "Describe the game",
-      },
-      null,
-      2,
-    );
+    for (const key of ["registration", "desktop_toolbar", "invite_required"])
+      $("#settings").elements[key].checked = state.settings[key];
+    if (!profileEditing) editGame();
+    await invitations();
     await users();
   }
 }
@@ -119,16 +114,21 @@ function renderGames() {
       select.append(o);
     }
     label.append(select);
+    label.hidden = !state.user.admin;
     const launch = node("button", "Launch instance");
     launch.onclick = () =>
       action(async () => {
         const instance = await api("/instances", "POST", {
           game: game.id,
-          resolution: select.value,
+          ...(state.user.admin ? { resolution: select.value } : {}),
         });
         message(
           "Instance created. The desktop may take a few seconds to become ready.",
         );
+        if (!state.user.admin) {
+          location.assign(instance.url);
+          return;
+        }
         await refresh();
       }, launch);
     body.append(label, launch);
@@ -136,7 +136,7 @@ function renderGames() {
       const edit = node("button", "Edit", "secondary");
       edit.onclick = () => {
         $("#admin details").open = true;
-        $("#profile").elements.definition.value = JSON.stringify(game, null, 2);
+        editGame(game);
         $("#profile").scrollIntoView({ behavior: "smooth" });
       };
       const remove = node("button", "Remove from catalog", "danger");
@@ -164,14 +164,13 @@ function renderGames() {
     );
 }
 async function refresh() {
-  const list = await api("/instances");
+  const list = (await api("/instances")).filter((i) =>
+    ["running", "starting"].includes(i.status),
+  );
   $("#instances").replaceChildren();
   if (!list.length)
     $("#instances").append(
-      node(
-        "p",
-        "You have no instances yet. Choose a game to launch your first one.",
-      ),
+      node("p", "No running instances. Choose a game to start playing."),
     );
   for (const i of list) {
     const row = node("div", null, "instance " + i.status);
@@ -195,9 +194,7 @@ async function refresh() {
     const controls = node("div", null, "actions");
     if (i.status === "running") {
       const open = node("a", "Connect", "button");
-      open.href = "/desktop/" + i.id + "/";
-      open.target = "_blank";
-      open.rel = "noopener";
+      open.href = "/play/" + i.id;
       const stop = node("button", "Stop", "danger");
       stop.onclick = () => {
         if (confirm("Stop this instance? Save your game before continuing."))
@@ -221,6 +218,9 @@ $("#settings").onsubmit = (e) => {
       banner: f.elements.banner.value,
       banner_image: f.elements.banner_image.value,
       registration: f.elements.registration.checked,
+      desktop_toolbar: f.elements.desktop_toolbar.checked,
+      invite_required: f.elements.invite_required.checked,
+      idle_minutes: Number(f.elements.idle_minutes.value),
       max_instances: Number(f.elements.max_instances.value),
       per_user: Number(f.elements.per_user.value),
     });
@@ -228,16 +228,115 @@ $("#settings").onsubmit = (e) => {
     message("Settings saved.");
   }, e.submitter);
 };
+function editGame(game) {
+  profileEditing = !!game;
+  const f = $("#profile").elements;
+  $("#profile-title").textContent = game ? "Edit game" : "Add game";
+  f.game_id.value = game?.id || "";
+  f.game_id.readOnly = !!game;
+  f.game_name.value = game?.name || "";
+  f.description.value = game?.description || "";
+  f.image.value = game?.image || "";
+  f.command.value = (game?.command || []).join("\n");
+  f.resolutions.value = (game?.resolutions || ["1280x720", "1920x1080"]).join(
+    ",",
+  );
+  f.default_resolution.value =
+    game?.default_resolution || game?.resolutions?.[0] || "1280x720";
+  f.max_per_user.value = game?.max_per_user ?? 1;
+  f.enabled.checked = game?.enabled ?? true;
+  f.internet_access.checked = game?.internet_access ?? false;
+  f.game_banner.value = game?.banner || "";
+  f.env.value = JSON.stringify(game?.env || {}, null, 2);
+}
+function newGame() {
+  editGame();
+  $("#admin details").open = true;
+  $("#profile").scrollIntoView({ behavior: "smooth" });
+  $("#profile").elements.game_name.focus();
+}
+$("#add-game").onclick = newGame;
+$("#new-game").onclick = newGame;
+$("#profile").oninput = () => {
+  profileEditing = true;
+};
 $("#profile").onsubmit = (e) => {
   e.preventDefault();
   action(async () => {
-    await api(
-      "/admin/games",
-      "PUT",
-      JSON.parse(e.target.elements.definition.value),
-    );
+    const f = e.target.elements;
+    await api("/admin/games", "PUT", {
+      id: f.game_id.value,
+      name: f.game_name.value,
+      description: f.description.value,
+      image: f.image.value,
+      command: f.command.value
+        .split("\n")
+        .map((v) => v.trim())
+        .filter(Boolean),
+      resolutions: f.resolutions.value
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean),
+      default_resolution: f.default_resolution.value.trim(),
+      max_per_user: Number(f.max_per_user.value),
+      enabled: f.enabled.checked,
+      internet_access: f.internet_access.checked,
+      banner: f.game_banner.value,
+      env: JSON.parse(f.env.value),
+    });
+    profileEditing = false;
     await load();
     message("Game saved.");
+  }, e.submitter);
+};
+async function invitations() {
+  const list = await api("/admin/invitations");
+  $("#invitations").replaceChildren();
+  for (const invite of list) {
+    const row = node("div", null, "user-row");
+    row.append(
+      node(
+        "span",
+        (invite.label || "Invitation") +
+          " — " +
+          invite.uses +
+          "/" +
+          invite.max_uses +
+          " uses" +
+          (invite.revoked
+            ? " (revoked)"
+            : invite.expires < Date.now() / 1000
+              ? " (expired)"
+              : " — expires " +
+                new Date(invite.expires * 1000).toLocaleDateString()),
+      ),
+    );
+    if (!invite.revoked) {
+      const revoke = node("button", "Revoke", "secondary");
+      revoke.onclick = () =>
+        action(async () => {
+          await api("/admin/invitations/" + invite.id, "DELETE", {});
+          await invitations();
+        }, revoke);
+      row.append(revoke);
+    }
+    $("#invitations").append(row);
+  }
+}
+$("#invitation-form").onsubmit = (e) => {
+  e.preventDefault();
+  action(async () => {
+    const f = e.target.elements;
+    const result = await api("/admin/invitations", "POST", {
+      label: f.label.value,
+      max_uses: Number(f.max_uses.value),
+      expires_days: Number(f.expires_days.value),
+    });
+    $("#invitation-result").replaceChildren(
+      node("span", "Copy this code now; it is shown only once: "),
+      node("code", result.code),
+    );
+    await invitations();
   }, e.submitter);
 };
 async function users() {
@@ -272,7 +371,76 @@ async function users() {
       };
       row.append(toggle);
     }
-    $("#users").append(row);
+    const container = node("div", null, "account");
+    container.append(row);
+    if (!u.admin) {
+      const details = node("details", null, "advanced");
+      details.append(node("summary", "Game access and instance limits"));
+      const form = node("form", null, "account-policy");
+      const maximum = node(
+        "label",
+        "Total instances (blank uses the platform limit)",
+      );
+      const maxInput = node("input");
+      maxInput.type = "number";
+      maxInput.min = 0;
+      maxInput.max = 100;
+      maxInput.value = u.policy.max_instances ?? "";
+      maximum.append(maxInput);
+      form.append(maximum);
+      const inherit = node("label", null, "check"),
+        inheritInput = node("input");
+      inheritInput.type = "checkbox";
+      inheritInput.checked = u.policy.games === null;
+      inherit.append(
+        inheritInput,
+        document.createTextNode("Use the library's default game access"),
+      );
+      form.append(inherit);
+      const fields = [];
+      for (const game of state.games) {
+        const label = node("label", game.name + " instances (0 blocks access)");
+        const input = node("input");
+        input.type = "number";
+        input.min = 0;
+        input.max = 100;
+        input.value = u.policy.games?.[game.id] ?? game.max_per_user ?? 1;
+        input.disabled = inheritInput.checked;
+        label.append(input);
+        form.append(label);
+        fields.push([game.id, input]);
+      }
+      inheritInput.onchange = () =>
+        fields.forEach(([, input]) => {
+          input.disabled = inheritInput.checked;
+        });
+      const save = node("button", "Save account limits");
+      form.append(save);
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        action(async () => {
+          await api("/admin/users/" + u.id, "PATCH", {
+            policy: {
+              max_instances:
+                maxInput.value === "" ? null : Number(maxInput.value),
+              games: inheritInput.checked
+                ? null
+                : Object.fromEntries(
+                    fields.map(([id, input]) => [id, Number(input.value)]),
+                  ),
+            },
+          });
+          message("Account limits saved.");
+          await users();
+        }, save);
+      };
+      details.append(form);
+      container.append(details);
+    }
+    $("#users").append(container);
   }
 }
 action(load);
+setInterval(() => {
+  if (state?.user && !document.hidden) action(refresh);
+}, 15000);

@@ -30,8 +30,8 @@ For a local demo with OpenTTD included, run:
 The script creates `.env` with a random administrator password if it does not
 exist, builds the runtime and game images, starts the portal, waits for its health
 check, and registers OpenTTD. Open `http://localhost:8080` and use the credentials
-in `.env`, or create your own account. Repeating the command preserves existing
-credentials and data and updates the bundled OpenTTD profile. All application
+in `.env`. Create an invitation in Administration before registering a player
+account. Repeating the command preserves existing credentials and data and updates the bundled OpenTTD profile. All application
 dependencies run in Docker; the host needs Docker Engine, Docker Compose, and
 Bash. On macOS, Docker Desktop or OrbStack provides the Linux environment.
 
@@ -50,7 +50,8 @@ private; it is excluded from Git. The administrator is created only when the
 database is initialized. Editing `.env` later does not reset an existing
 administrator's password. If `.env` already existed before running the script,
 its credentials are preserved. You can also create a regular account through
-the sign-in screen; only administrators can edit settings and game profiles.
+the sign-in screen using an invitation code; only administrators can edit settings
+and game profiles.
 
 ### Manual setup
 
@@ -84,16 +85,17 @@ and commands, and the portal has access to the Docker daemon.
 The CLI requires Python 3 and has no additional dependencies.
 
 ```sh
-python3 cli/gamedock.py --url http://localhost:8080 register player
+python3 cli/gamedock.py --url http://localhost:8080 register player --invite INVITATION_CODE
 python3 cli/gamedock.py login player
-python3 cli/gamedock.py launch desktop --resolution 1920x1080
+python3 cli/gamedock.py launch desktop
 python3 cli/gamedock.py list
 python3 cli/gamedock.py stop INSTANCE_ID
 python3 cli/gamedock.py logout
 ```
 
 `launch` prints the instance ID and desktop URL. Sign in to the browser with the
-same account to connect. Passwords are prompted for rather than passed as command
+same account to connect. Players use the administrator-configured resolution;
+`--resolution` is available only to administrators. Passwords are prompted for rather than passed as command
 arguments. CLI tokens expire after 24 hours and are stored with permissions 0600
 in `~/.config/gamedock/session.json`. Use `GAMEDOCK_URL` or `--url` to select the
 server and `--credentials` to maintain separate sessions.
@@ -102,7 +104,14 @@ server and `--credentials` to maintain separate sessions.
 
 Derive an image from `gamedock-runtime:local`, install the program, and keep the
 `player` user (UID 1000). The working directory is `/data`, persisted per account
-and game. Create a profile through Administration or the CLI as an administrator:
+and game. As an administrator, click **Add game** above the library. Fill in the
+name, unique ID, installed Docker image, launch command (one argument per line),
+available resolutions, player resolution, and per-player instance limit. Click
+**Save game** to publish it. Use **Edit** on a game card to update it. Environment
+variables and Internet access are optional under Advanced settings. The image must already be built
+or pulled on the server; adding a game does not download it.
+
+Alternatively, create a profile through the CLI as an administrator:
 
 ```json
 {
@@ -113,6 +122,9 @@ and game. Create a profile through Administration or the CLI as an administrator
   "image": "my-game:local",
   "command": ["/opt/game/start", "--server", "example.com"],
   "resolutions": ["1280x720", "1920x1080"],
+  "default_resolution": "1280x720",
+  "max_per_user": 1,
+  "enabled": true,
   "env": { "LANG": "en_US.UTF-8" }
 }
 ```
@@ -169,15 +181,67 @@ its `profile.json`. The Wine prefix is persisted at `/data/wine`.
 
 ## Persistence and operation
 
-### Desktop toolbar
+### Player desktops and toolbar
 
-Set `DESKTOP_TOOLBAR = False` in `server/app.py` to hide Xpra's floating toolbar,
-or `True` to show it (the default). Rebuild and recreate the portal with
-`docker compose up -d --build`, then reopen the desktop from the library.
-Running games do not need to restart. For a single connection, append
-`?floating_menu=false` or `?floating_menu=true` to its desktop URL to override
-the default. Hiding the toolbar only changes the interface; it does not disable
-the underlying Xpra features.
+Launching a game as a player opens its desktop automatically in the same tab.
+The game is centered in the available space and scaled down to fit smaller
+windows without changing its configured resolution. The top bar shows running
+instances, **Previous instance**, **Back to library**, and **Stop instance**.
+Returning to the library or changing instances disconnects the viewer and keeps
+the game running. Stopping an instance requires confirmation and preserves its
+saved files. Stopped instances are hidden from the library; history remains in
+the API and database.
+
+Use **Administration → Your platform → Show desktop toolbar** to show or hide
+Xpra's floating controls. Changes apply to open viewers within 15 seconds and do
+not require rebuilding images or restarting games. `DESKTOP_TOOLBAR` in
+`server/app.py` supplies the initial default when no administrator preference has
+been saved. Hiding the toolbar changes the interface, not the underlying Xpra
+features.
+
+### Invitations and player limits
+
+Registration requires an invitation by default. Under **Administration →
+Invitations**, create a code with a label, usage limit, and expiration. Copy it
+when it is shown: only its hash is stored, and it cannot be displayed again.
+Share it with the player, who enters it in the registration form or uses the CLI
+`register --invite CODE` option. Used-up, revoked, and expired codes are rejected.
+Existing accounts can still sign in without a code. Disable **Require an
+invitation code** for open registration, or disable **Allow account registration**
+to close registration entirely.
+
+The platform limits total concurrent instances and instances per account. Each
+game also has an availability switch, a per-player instance cap (0 blocks access),
+and a fixed player resolution. Under **Accounts → Game access and instance
+limits**, override an account's total allowance and specify how many instances of
+each game it may launch. With an explicit game list, games not on the list are
+blocked. Inheriting library access applies the default limits to current and new
+games. The most restrictive platform, account, and game limits apply; changes
+restrict future launches without interrupting current games. Administrators may
+choose from a game's configured resolutions and bypass game access restrictions,
+but still obey the platform's global and per-account concurrent limits.
+
+### Session networks
+
+Game networks are internal by default: the portal can reach each desktop, but
+games cannot reach the Internet or sibling game networks. This also preserves
+isolation when using OrbStack for the local demo. For a game that needs downloads,
+authentication, or online multiplayer, enable **Advanced settings → Allow internet
+access** (`internet_access: true` in its profile). Use a native Linux Docker host
+for Internet-enabled games: OrbStack permits traffic between ordinary bridges,
+so separate non-internal networks alone do not provide sibling isolation there.
+Network changes apply to newly launched instances.
+
+### Inactivity cleanup
+
+**Stop inactive instances after (minutes)** defaults to 30; 0 disables cleanup.
+Mouse, touch, wheel, and keyboard input in the player page update the instance's
+activity timestamp. An idle tab, a connected WebSocket, and game animation do not
+keep it alive. Each instance has its own timer, including background instances.
+The player warns during the final minute; the server checks every 15 seconds and
+stops expired instances while retaining their saved files. Timestamps and settings
+persist across portal restarts. Unsubmitted progress inside the game can be lost
+when an inactive instance stops; choose a timeout appropriate for the game.
 
 - The `gamedock_gamedock-data` volume stores SQLite data: accounts, scrypt password
   hashes, revocable tokens, profiles, configuration, and instance history.
@@ -206,19 +270,24 @@ fields. Authenticate with an HttpOnly cookie or `Authorization: Bearer TOKEN`.
 Do not put tokens in URLs. Other users' instances return 404; administrators can
 manage all instances.
 
-| Method     | Route                                   | Purpose                                 |
-| ---------- | --------------------------------------- | --------------------------------------- |
-| GET        | `/api/catalog`                          | Public settings, account, and games     |
-| POST       | `/api/auth/register`, `/api/auth/login` | `{username, password}`                  |
-| POST       | `/api/logout`                           | Revoke the current session              |
-| GET / POST | `/api/instances`                        | List / create with `{game, resolution}` |
-| DELETE     | `/api/instances/ID`                     | Stop an instance                        |
-| GET / WS   | `/desktop/ID/…`                         | Authenticated desktop access            |
-| PUT        | `/api/admin/settings`                   | Name, banners, registration, limits     |
-| PUT        | `/api/admin/games`                      | Create or replace a profile             |
-| DELETE     | `/api/admin/games/ID`                   | Remove a profile                        |
-| GET        | `/api/admin/users`                      | List accounts                           |
-| PATCH      | `/api/admin/users/ID`                   | `{enabled: true/false}`                 |
+| Method     | Route                                   | Purpose                                                       |
+| ---------- | --------------------------------------- | ------------------------------------------------------------- |
+| GET        | `/api/catalog`                          | Public settings, account, and games                           |
+| POST       | `/api/auth/register`, `/api/auth/login` | `{username, password}`                                        |
+| POST       | `/api/logout`                           | Revoke the current session                                    |
+| GET / POST | `/api/instances`                        | List / create with `{game, resolution}`                       |
+| DELETE     | `/api/instances/ID`                     | Stop an instance                                              |
+| GET        | `/play/ID`                              | Centered player and instance navigation                       |
+| POST       | `/api/instances/ID/activity`            | Record user input for inactivity cleanup                      |
+| GET        | `/api/instances/ID`                     | Owned instance status and dimensions                          |
+| GET / WS   | `/desktop/ID/…`                         | Authenticated desktop access                                  |
+| PUT        | `/api/admin/settings`                   | Name, banners, registration, limits                           |
+| PUT        | `/api/admin/games`                      | Create or replace a profile                                   |
+| DELETE     | `/api/admin/games/ID`                   | Remove a profile                                              |
+| GET        | `/api/admin/users`                      | List accounts                                                 |
+| PATCH      | `/api/admin/users/ID`                   | `{enabled: true/false}` or `{policy: {max_instances, games}}` |
+| GET / POST | `/api/admin/invitations`                | List metadata / create an invitation                          |
+| DELETE     | `/api/admin/invitations/ID`             | Revoke an invitation                                          |
 
 ## Validation
 
@@ -246,7 +315,9 @@ localhost:18088. It reads bootstrap credentials from `/tmp/gamedock-qa.env`.
 Do not run it against real accounts. `tests/browser.py` checks registration,
 launching, rendered desktop pixels, real keyboard input, WebSocket revocation,
 termination, and mobile layout. `tests/game_browser.py` checks administration
-forms, the banner image, and a real OpenTTD session. Build the browser environment
+forms, game creation, invitations, player access, live toolbar settings, and a
+real OpenTTD session. `tests/idle_live.py` verifies the actual inactivity worker
+against a Docker instance with a one-minute timeout. Build the browser environment
 with `tests/Dockerfile.browser`; screenshots are written to `/artifacts`. The QA
 portal uses `PUBLIC_URL=http://gamedock-qa-portal-1:8080`, passed to the browser as
 `QA_URL`; the QA CLI connects through loopback:18088.

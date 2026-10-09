@@ -52,6 +52,12 @@
               maxlength="256"
               required
           /></label>
+          <label id="invite-field" hidden
+            >Invitation code (for new accounts)<input
+              name="invite"
+              autocomplete="off"
+              maxlength="128"
+          /></label>
           <div class="actions">
             <button type="submit">Sign in</button
             ><button type="button" id="register" class="secondary">
@@ -69,6 +75,7 @@
           <h2>Choose where to play</h2>
           <button id="refresh" class="secondary">Refresh instances</button>
         </div>
+        <button id="add-game" type="button" hidden>Add game</button>
         <div id="games" class="games"></div>
         <h2>Your instances</h2>
         <div id="instances"></div>
@@ -93,7 +100,27 @@
               ><label class="check"
                 ><input type="checkbox" name="registration" />Allow account
                 registration</label
-              ><label
+              ><label class="check"
+                ><input type="checkbox" name="invite_required" />Require an
+                invitation code</label
+              >
+              <label class="check"
+                ><input type="checkbox" name="desktop_toolbar" />Show desktop
+                toolbar</label
+              >
+              <label
+                >Stop inactive instances after (minutes)<input
+                  name="idle_minutes"
+                  type="number"
+                  min="0"
+                  max="1440"
+                  required
+              /></label>
+              <p class="help">
+                Use 0 to disable inactivity cleanup. Only mouse and keyboard
+                input count as activity.
+              </p>
+              <label
                 >Concurrent instances<input
                   name="max_instances"
                   type="number"
@@ -110,22 +137,140 @@
               ><button>Save settings</button>
             </form>
             <form id="profile">
-              <h3>Game profile</h3>
+              <h3 id="profile-title">Add game</h3>
               <p>
-                Set the installed image, launch command, and available
-                resolutions.
+                Install a Docker image on the server, then add it to the library
+                here.
               </p>
               <label
-                >JSON definition<textarea
-                  name="definition"
-                  rows="15"
-                  spellcheck="false"
+                >Game ID<input
+                  name="game_id"
                   required
-                ></textarea></label
-              ><button>Save game</button>
-              <p id="profile-help"></p>
+                  pattern="[a-z0-9][a-z0-9-]{0,39}"
+                  maxlength="40"
+                  placeholder="my-game"
+              /></label>
+              <label
+                >Game name<input
+                  name="game_name"
+                  required
+                  maxlength="200"
+                  placeholder="My game"
+              /></label>
+              <label
+                >Description<textarea
+                  name="description"
+                  maxlength="2000"
+                ></textarea>
+              </label>
+              <label
+                >Docker image<input
+                  name="image"
+                  required
+                  placeholder="gamedock-openttd:local"
+              /></label>
+              <label
+                >Launch command and arguments<textarea
+                  name="command"
+                  rows="3"
+                  required
+                  placeholder="/usr/local/bin/launch-openttd"
+                ></textarea>
+              </label>
+              <p class="help">
+                One argument per line. The first line is the executable; no
+                shell is implied.
+              </p>
+              <label
+                >Available resolutions<input
+                  name="resolutions"
+                  value="1280x720,1920x1080"
+                  required
+              /></label>
+              <label
+                >Player resolution<input
+                  name="default_resolution"
+                  value="1280x720"
+                  required
+              /></label>
+              <p class="help">
+                Players always use this resolution. Only administrators can
+                choose another.
+              </p>
+              <label
+                >Instances of this game per player<input
+                  name="max_per_user"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value="1"
+                  required
+              /></label>
+              <label class="check"
+                ><input type="checkbox" name="enabled" checked />Available to
+                players</label
+              >
+              <label
+                >Game banner (optional URL)<input name="game_banner" type="url"
+              /></label>
+              <details class="advanced">
+                <summary>Advanced settings</summary>
+                <label class="check"
+                  ><input type="checkbox" name="internet_access" />Allow
+                  internet access</label
+                >
+                <p class="help">
+                  Off by default. Internet-enabled games require a Linux Docker
+                  host to preserve isolation between game networks.
+                </p>
+                <label
+                  >Environment variables (JSON)<textarea
+                    name="env"
+                    rows="4"
+                    spellcheck="false"
+                  >
+{}</textarea
+                  >
+                </label>
+              </details>
+              <div class="actions">
+                <button>Save game</button
+                ><button type="button" id="new-game" class="secondary">
+                  New game
+                </button>
+              </div>
+              <p id="profile-help" role="status"></p>
             </form>
           </div>
+          <section class="invitations">
+            <h3>Invitations</h3>
+            <form id="invitation-form">
+              <label
+                >Label<input
+                  name="label"
+                  maxlength="100"
+                  placeholder="Friends" /></label
+              ><label
+                >Maximum uses<input
+                  name="max_uses"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value="1"
+                  required /></label
+              ><label
+                >Valid for (days)<input
+                  name="expires_days"
+                  type="number"
+                  min="1"
+                  max="365"
+                  value="7"
+                  required /></label
+              ><button>Create invitation</button>
+            </form>
+            <p id="invitation-result" role="status"></p>
+            <div id="invitations"></div>
+          </section>
           <h3>Accounts</h3>
           <div id="users"></div>
         </details>

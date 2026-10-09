@@ -1,91 +1,106 @@
-"""Real OpenTTD session and administrator UI against disposable QA."""
+"""Real OpenTTD, game creation, invitation, and account settings in disposable QA."""
 
-import os
+import json
 from pathlib import Path
 import secrets
-import time
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, expect
+from browser_helpers import URL, ARTIFACTS, PASSWORD, rendered, centered
 
-url = os.getenv("QA_URL", "http://localhost:18088")
-password = next(
-    line.split("=", 1)[1]
-    for line in Path("/qa.env").read_text().splitlines()
-    if line.startswith("ADMIN_PASSWORD=")
-)
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
-    page = browser.new_page(viewport={"width": 1280, "height": 900})
-    page.goto(url)
+    page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    page.goto(URL)
     page.get_by_label("Username", exact=True).fill("admin")
-    page.get_by_label("Password", exact=True).fill(password)
+    page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
     page.get_by_text("Administration", exact=True).click()
-    page.locator("#settings").get_by_label("Name", exact=True).fill("GameDock Playroom")
-    page.locator("#settings").get_by_label("Banner / welcome message").fill(
+    settings = page.locator("#settings")
+    settings.get_by_label("Name", exact=True).fill("GameDock Playroom")
+    settings.get_by_label("Banner / welcome message").fill(
         "Independent desktops for your community."
     )
-    page.locator("#settings").get_by_label("Banner image (optional URL)").fill(
-        url + "/assets/banner.svg"
+    settings.get_by_label("Banner image (optional URL)").fill(
+        URL + "/assets/banner.svg"
     )
-    page.get_by_role("button", name="Save settings").click()
-    page.get_by_text("Settings saved.", exact=True).wait_for()
-    page.get_by_role("heading", name="GameDock Playroom", exact=True).wait_for()
-    page.locator("#intro-banner").wait_for(state="visible")
-    page.wait_for_function("document.querySelector('#intro-banner').naturalWidth > 0")
-    page.locator("#profile").get_by_label("JSON definition").fill(
-        Path("examples/openttd/profile.json").read_text()
+    settings.get_by_label("Show desktop toolbar").uncheck()
+    settings.get_by_label("Require an invitation code").check()
+    page.get_by_role("button", name="Save settings", exact=True).click()
+    expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()
+    expect(
+        page.get_by_role("heading", name="GameDock Playroom", exact=True)
+    ).to_be_visible()
+    page.wait_for_function("document.querySelector('#intro-banner').naturalWidth>0")
+    # The visible Add game button opens a complete form; no raw profile JSON required.
+    page.get_by_role("button", name="Add game", exact=True).click()
+    profile = json.loads(Path("examples/openttd/profile.json").read_text())
+    form = page.locator("#profile")
+    form.get_by_label("Game ID", exact=True).fill(profile["id"])
+    form.get_by_label("Game name", exact=True).fill(profile["name"])
+    form.get_by_label("Description", exact=True).fill(profile["description"])
+    form.get_by_label("Docker image", exact=True).fill(profile["image"])
+    form.get_by_label("Launch command and arguments").fill(
+        "\n".join(profile["command"])
     )
+    form.get_by_label("Available resolutions").fill(",".join(profile["resolutions"]))
+    form.get_by_label("Player resolution", exact=True).fill("1280x720")
+    form.get_by_label("Instances of this game per player").fill("1")
     page.get_by_role("button", name="Save game", exact=True).click()
-    page.get_by_text("Game saved.", exact=True).wait_for()
-    page.get_by_role("heading", name="OpenTTD", exact=True).wait_for()
-    page.screenshot(path="/artifacts/admin.png", full_page=True)
-    page.get_by_role("button", name="Sign out", exact=True).click()
-    page.get_by_label("Username", exact=True).fill("game_" + secrets.token_hex(4))
-    page.get_by_label("Password", exact=True).fill(secrets.token_urlsafe(20))
-    page.get_by_role("button", name="Create account", exact=True).click()
-    page.get_by_role("heading", name="OpenTTD", exact=True).wait_for()
-    page.locator("article").filter(
-        has=page.get_by_role("heading", name="OpenTTD", exact=True)
+    expect(page.get_by_text("Game saved.", exact=True)).to_be_visible()
+    expect(page.get_by_role("heading", name="OpenTTD", exact=True)).to_be_visible()
+    invitation = page.locator("#invitation-form")
+    invitation.get_by_label("Label", exact=True).fill("Browser QA")
+    invitation.get_by_role("button", name="Create invitation").click()
+    expect(page.locator("#invitation-result code")).to_be_visible()
+    code = page.locator("#invitation-result code").inner_text()
+    page.screenshot(path=str(ARTIFACTS / "admin.png"), full_page=True)
+    # Use a separate player context so administrator settings can be changed live.
+    player = browser.new_page(viewport={"width": 1440, "height": 1000})
+    player.goto(URL)
+    username = "game_" + secrets.token_hex(4)
+    player.get_by_label("Username", exact=True).fill(username)
+    player.get_by_label("Password", exact=True).fill(secrets.token_urlsafe(20))
+    player.get_by_label("Invitation code (for new accounts)").fill(code)
+    player.get_by_role("button", name="Create account", exact=True).click()
+    expect(player.get_by_role("heading", name="OpenTTD", exact=True)).to_be_visible()
+    expect(player.locator("#games select:visible")).to_have_count(0)
+    player.locator("article").filter(
+        has=player.get_by_role("heading", name="OpenTTD", exact=True)
     ).get_by_role("button", name="Launch instance").click()
-    page.get_by_role("link", name="Connect").wait_for(timeout=60000)
-    with page.expect_popup() as popup:
-        page.get_by_role("link", name="Connect").click()
-    desktop = popup.value
-    failures = []
-    desktop.on("pageerror", lambda e: failures.append(str(e)))
-    desktop.on("requestfailed", lambda r: failures.append(r.url + " " + str(r.failure)))
-    desktop.on(
-        "response",
-        lambda r: failures.append(str(r.status) + " " + r.url)
-        if r.status >= 400
-        else None,
+    player.wait_for_url("**/play/*", timeout=60000)
+    remote = rendered(player, 30)
+    centered(player)
+    assert remote.locator("#float_menu").is_hidden()
+    player.screenshot(path=str(ARTIFACTS / "openttd.png"), full_page=True)
+    # Changing the admin toolbar checkbox affects existing viewers without rebuilding.
+    settings.get_by_label("Show desktop toolbar").check()
+    page.get_by_role("button", name="Save settings", exact=True).click()
+    expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()
+    expect(player.frame_locator("#desktop-frame").locator("#float_menu")).to_be_visible(
+        timeout=30000
     )
-    deadline = time.monotonic() + 45
-    while time.monotonic() < deadline:
-        response = desktop.goto(desktop.url)
-        if response.status == 200:
-            break
-        time.sleep(0.5)
-    try:
-        desktop.wait_for_function(
-            """() => [...document.querySelectorAll('canvas')].some(c => {
-          if(c.width < 640 || c.height < 480) return false;
-          const ctx=c.getContext('2d'); if(!ctx) return false;
-          const data=ctx.getImageData(0,0,c.width,c.height).data; const colors=new Set();
-          for(let i=0;i<data.length;i+=160) if(data[i+3]) colors.add(data.slice(i,i+4).join(','));
-          return colors.size>30;
-        })""",
-            timeout=45000,
-        )
-        desktop.screenshot(path="/artifacts/openttd.png", full_page=True)
-    finally:
-        desktop.screenshot(path="/artifacts/openttd-debug.png", full_page=True)
-        print("Asset failures:", failures)
-        print("Game viewer:", desktop.locator("body").inner_text()[:1000])
-    page.on("dialog", lambda d: d.accept())
-    page.get_by_role("button", name="Stop", exact=True).click()
-    page.get_by_text("Stopped", exact=False).wait_for()
+    # Account-level game type and total instance controls are editable in the UI.
+    page.reload()
+    page.get_by_text("Administration", exact=True).click()
+    account = page.locator(".account").filter(
+        has=page.get_by_text(username, exact=True)
+    )
+    account.get_by_text("Game access and instance limits", exact=True).click()
+    account.get_by_label("Total instances (blank uses the platform limit)").fill("1")
+    account.get_by_label("Use the library's default game access").uncheck()
+    account.get_by_label("Test desktop instances (0 blocks access)", exact=True).fill(
+        "0"
+    )
+    account.get_by_label("OpenTTD instances (0 blocks access)", exact=True).fill("1")
+    account.get_by_role("button", name="Save account limits").click()
+    expect(page.get_by_text("Account limits saved.", exact=True)).to_be_visible()
+    player.on("dialog", lambda dialog: dialog.accept())
+    player.get_by_role("button", name="Stop instance", exact=True).click()
+    player.wait_for_url(URL + "/", timeout=60000)
+    expect(
+        player.get_by_role("heading", name="Test desktop", exact=True)
+    ).to_have_count(0)
+    expect(player.locator("#instances .instance")).to_have_count(0)
     browser.close()
 print(
-    "PASS: admin name/banner/profile forms, OpenTTD launch, rendered game over WebSocket, termination"
+    "PASS: visible game creation form, invitation creation/redemption, rendered OpenTTD, live toolbar setting, account limits, stop and hidden history"
 )
