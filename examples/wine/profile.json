@@ -1,0 +1,9 @@
+{
+  "id": "windows-game",
+  "name": "Mi juego Windows",
+  "image": "gamedock-wine:local",
+  "command": ["wine", "/opt/game/Game.exe"],
+  "description": "Adapta el ejecutable y sus argumentos a tu juego.",
+  "resolutions": ["1280x720", "1920x1080"],
+  "env": {}
+}

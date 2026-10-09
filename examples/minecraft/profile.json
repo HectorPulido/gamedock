@@ -1,0 +1,9 @@
+{
+  "id": "minecraft",
+  "name": "Minecraft",
+  "image": "gamedock-minecraft:local",
+  "command": ["java", "-jar", "/opt/minecraft/launcher.jar"],
+  "resolutions": ["1280x720", "1920x1080"],
+  "description": "Tu cliente Minecraft dentro de un escritorio personal.",
+  "env": {}
+}

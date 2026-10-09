@@ -1,0 +1,9 @@
+{
+  "id": "openttd",
+  "name": "OpenTTD",
+  "description": "Construye una red de transporte en tu propio escritorio.",
+  "image": "gamedock-openttd:local",
+  "command": ["/usr/local/bin/launch-openttd"],
+  "resolutions": ["1280x720", "1920x1080"],
+  "env": {}
+}
