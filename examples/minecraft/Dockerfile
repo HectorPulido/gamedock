@@ -1,4 +1,5 @@
-FROM gamedock-runtime:local
+ARG BASE_IMAGE=gamedock-runtime:local
+FROM ${BASE_IMAGE}
 USER root
 RUN dnf install -y java-21-openjdk mesa-dri-drivers mesa-libGL alsa-lib libXrandr libXcursor libXi libXinerama libXtst && dnf clean all && mkdir -p /opt/minecraft
 # Supply your own legally obtained, Linux-compatible launcher/client files.

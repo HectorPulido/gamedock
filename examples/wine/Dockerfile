@@ -1,4 +1,5 @@
-FROM gamedock-runtime:local
+ARG BASE_IMAGE=gamedock-runtime:local
+FROM ${BASE_IMAGE}
 USER root
 RUN dnf install -y --setopt=install_weak_deps=False wine wine-core.i686 wine-system-winefonts && dnf clean all && mkdir -p /opt/game
 COPY --chown=player:player client/ /opt/game/

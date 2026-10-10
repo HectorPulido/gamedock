@@ -1,0 +1,59 @@
+# Standalone verification desktops. Build the base first: docker build -t gamedock-runtime:local runtime
+services:
+  nvidia:
+    profiles: [nvidia]
+    image: gamedock-runtime-gpu-nvidia:local
+    build:
+      context: ../../runtime/gpu
+      target: nvidia
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      GAMEDOCK_GPU: '{"vendor":"nvidia","device":"${GPU_ID:-0}","vgl_display":"egl0"}'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${GPU_ID:-0}"]
+              capabilities: [gpu]
+    ports: ["127.0.0.1:6085:6084"]
+    volumes: ["nvidia-data:/data"]
+    command: [glxgears]
+  amd:
+    profiles: [amd]
+    image: gamedock-runtime-gpu-amd:local
+    build:
+      context: ../../runtime/gpu
+      target: amd
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      GAMEDOCK_GPU: '{"vendor":"amd","device":"${GPU_RENDER_DEVICE:-/dev/dri/renderD128}"}'
+    devices: ["${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:rw"]
+    group_add: ["${GPU_RENDER_GID:-109}"]
+    ports: ["127.0.0.1:6086:6084"]
+    volumes: ["amd-data:/data"]
+    command: [glxgears]
+  intel:
+    profiles: [intel]
+    image: gamedock-runtime-gpu-intel:local
+    build:
+      context: ../../runtime/gpu
+      target: intel
+    init: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      GAMEDOCK_GPU: '{"vendor":"intel","device":"${GPU_RENDER_DEVICE:-/dev/dri/renderD128}"}'
+    devices: ["${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:${GPU_RENDER_DEVICE:-/dev/dri/renderD128}:rw"]
+    group_add: ["${GPU_RENDER_GID:-109}"]
+    ports: ["127.0.0.1:6087:6084"]
+    volumes: ["intel-data:/data"]
+    command: [glxgears]
+volumes:
+  nvidia-data:
+  amd-data:
+  intel-data:

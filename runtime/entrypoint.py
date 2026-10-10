@@ -11,6 +11,7 @@ import sys
 import time
 
 
+from gpu import prepare_command, configure_software
 from streaming import runtime_options, validate_streaming
 
 
@@ -60,6 +61,7 @@ def main():
         + "\n"
     )
     (html_dir / "default-settings.txt").write_text(defaults)
+    configure_software()
     children = []
 
     def stop(*_):
@@ -89,6 +91,9 @@ def main():
             if children[0].poll() is not None or time.monotonic() > deadline:
                 raise RuntimeError("Desktop failed to start")
             time.sleep(0.1)
+        command, gpu_info = prepare_command(command)
+        (Path(runtime) / "gpu.json").write_text(json.dumps(gpu_info))
+        print("GameDock graphics: " + json.dumps(gpu_info), flush=True)
         children.append(subprocess.Popen(["openbox"]))
         children.append(
             subprocess.Popen(

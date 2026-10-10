@@ -440,3 +440,24 @@ requires a newly launched instance from the rebuilt runtime image.
 Portal HTML references a single content-versioned CSS/JS bundle frozen at startup.
 Versioned assets are immutable; unavailable old versions return 410 and require
 a reload, preventing a page from silently combining incompatible asset versions.
+
+### CPU graphics by default and optional Linux GPU runtimes
+
+The standard runtime uses Mesa llvmpipe for OpenGL rendering on the CPU, including
+on Mac Docker. Applications keep their normal command. **Games → CPU rendering
+threads** accepts 0 for automatic workers based on the container CPU quota
+(capped at 16), or 1–64 for an explicit value. Increase the game's CPU allocation
+to give rendering more CPU time. This provides software OpenGL compatibility;
+it cannot promise GPU-level performance or speed up every 2D game. Diagnostics
+shows the actual renderer and configured workers.
+
+Run `./scripts/build-gpu.sh` to build separate NVIDIA, AMD and Intel variants.
+Select graphics acceleration, device and host group IDs in **Administration →
+Games**, using a game image derived from the matching GPU runtime. Existing
+CPU-only profiles continue to work. The runtime verifies hardware OpenGL before
+launching and reports its renderer in Diagnostics. Rendering acceleration does
+not automatically enable hardware video encoding.
+
+See [GPU setup, demo Compose and game profiles](examples/gpu/README.md) for host
+drivers, permissions, test commands and compatibility limits. Physical GPU
+validation requires a Linux GPU host; OrbStack on this Mac has no GPU passthrough.

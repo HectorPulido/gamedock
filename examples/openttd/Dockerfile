@@ -1,4 +1,5 @@
-FROM gamedock-runtime:local
+ARG BASE_IMAGE=gamedock-runtime:local
+FROM ${BASE_IMAGE}
 USER root
 RUN dnf install -y --setopt=install_weak_deps=False openttd openttd-opengfx && dnf clean all
 COPY launch.sh /usr/local/bin/launch-openttd

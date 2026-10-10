@@ -1,0 +1,17 @@
+{
+  "id": "gpu-intel",
+  "name": "INTEL OpenGL demo",
+  "image": "gamedock-runtime-gpu-intel:local",
+  "command": [
+    "glxgears"
+  ],
+  "resolutions": [
+    "1280x720"
+  ],
+  "env": {},
+  "gpu": {
+    "vendor": "intel",
+    "device": "/dev/dri/renderD128",
+    "groups": []
+  }
+}

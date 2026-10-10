@@ -133,3 +133,37 @@ outside Git. Resource changes affect new sessions and do not restart games.
   telemetry back to numbers without losing decimal precision.
 - Transmission FPS are measured from Xpra frame boundaries; they do not measure
   the game engine. Image throughput excludes audio and transport overhead.
+
+## Optional NVIDIA / AMD / Intel runtimes (2026-10-10)
+
+- All three vendor targets build on the local Linux ARM64 Docker daemon, including
+  VirtualGL 3.1.3, GLVND, Mesa and diagnostic utilities. No physical GPU is exposed
+  by this Mac/OrbStack environment; hardware acceleration is not claimed tested.
+- 29 host tests run: 27 pass and two runtime-only Xpra tests skip on the host.
+  GPU tests cover device selection, restricted Docker device mappings, group IDs,
+  legacy CPU profiles, vendor validation and software-renderer rejection.
+- Actual container probes reject NVIDIA's available llvmpipe renderer and report
+  missing AMD/Intel render nodes, with nonzero exit status and explicit errors.
+- A Fedora EGL loading issue was resolved with `VGL_EGLLIB=libEGL.so.1`, so the
+  NVIDIA probe reaches renderer detection instead of failing to resolve EGL.
+- Browser coverage verifies all three GPU form options, JSON synchronization,
+  groups/devices, persistence, disabling GPU and a rendered CPU-only session from
+  a GPU image. Existing diagnostics and customization suites pass.
+- GPU usage must still be verified on the intended Linux hardware. Prepared
+  Compose demos and per-game profiles are in `examples/gpu`; no privileged mode,
+  host display socket or GPU access for the portal is needed.
+
+## Default software OpenGL (2026-10-10)
+
+- The standard runtime explicitly selects Mesa llvmpipe before Xvfb and the game
+  start. The game's command is unchanged and no GPU device is requested. Mesa was
+  already installed transitively; the change makes selection, worker budgeting
+  and inspection explicit rather than claiming new physical graphics resources.
+- Real container probes confirm two software workers with a 2-CPU quota and one
+  with a 0.5-CPU quota. Unit checks cover affinity/quota and manual override.
+- The GPU form also saves a configurable software worker count; 0 is automatic.
+  Diagnostics reports the renderer and configured workers. Software rendering
+  is distinguished from hardware acceleration and is not advertised as a speedup
+  for all games.
+- Chromium renders a real `glxgears` scene from a GPU image with hardware disabled,
+  and confirms llvmpipe plus an explicit three-worker setting in Diagnostics.

@@ -171,6 +171,48 @@
                 Leave blank to inherit platform resources. Changes apply to new
                 instances.
               </p>
+              <div class="appearance-grid">
+                <label
+                  >Graphics acceleration<select name="gpu_vendor">
+                    <option value="none">CPU · Mesa llvmpipe (default)</option>
+                    <option value="nvidia">NVIDIA · VirtualGL</option>
+                    <option value="amd">AMD · VirtualGL</option>
+                    <option value="intel">Intel · VirtualGL</option>
+                  </select></label
+                >
+                <label
+                  >GPU device<input
+                    name="gpu_device"
+                    placeholder="NVIDIA: 0 · AMD/Intel: /dev/dri/renderD128"
+                /></label>
+                <label
+                  >GPU host group IDs<input
+                    name="gpu_groups"
+                    placeholder="Example: 109"
+                /></label>
+              </div>
+              <label
+                >CPU rendering threads<input
+                  name="software_threads"
+                  type="number"
+                  min="0"
+                  max="64"
+                  step="1"
+                  value="0"
+              /></label>
+              <p class="help">
+                CPU rendering is the default, including on Mac Docker. 0 chooses
+                up to 16 workers based on the container CPU quota; increase Game
+                CPU to provide more processing time. More workers do not
+                guarantee more FPS. Hardware profiles ignore this control.
+              </p>
+              <p class="help" id="gpu-help">
+                Hardware GPU profiles require a Linux GPU host. Use a game image
+                derived from the matching GPU runtime. AMD/Intel require the
+                render device's numeric host group ID. GPU changes apply to new
+                instances. This accelerates compatible OpenGL rendering; video
+                encoding is configured separately.
+              </p>
               <div class="actions">
                 <button>Save game</button
                 ><button type="button" id="new-game" class="secondary">

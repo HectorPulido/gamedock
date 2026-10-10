@@ -288,6 +288,9 @@ const metrics = [
   ["game_rss_mb", "Game process memory", "MiB"],
   ["stream_rss_mb", "Streaming process memory", "MiB"],
   ["codecs", "Observed codecs", ""],
+  ["gpu_vendor", "Graphics profile", ""],
+  ["gpu_renderer", "OpenGL renderer", ""],
+  ["software_threads", "CPU render workers (configured)", ""],
   ["decode_errors", "Decode errors", ""],
   ["geometry", "Source → displayed", ""],
   ["canvas", "Canvas backing size", ""],
@@ -304,6 +307,7 @@ for (const [key, label] of metrics) {
 function sampleDiagnostics() {
   if (diagnostics.hidden || stopped || document.hidden) return;
   const sample = viewer.sample();
+  if (sample.gpu_vendor === "none") sample.gpu_vendor = "CPU / software";
   sample.hourly_gb =
     sample.image_mbps == null ? null : (sample.image_mbps * 3600) / 8 / 1000;
   const box = frame.getBoundingClientRect();
@@ -335,7 +339,9 @@ function sampleDiagnostics() {
             : "Live sample · capture target " + sample.target_hz + " Hz";
   for (const [key, , unit] of metrics) {
     const value = sample[key];
-    const serverMetric = /^(capture|game_|stream_)/.test(key);
+    const serverMetric = /^(capture|game_|stream_|gpu_|software_threads)/.test(
+      key,
+    );
     values.querySelector('[data-metric="' + key + '"]').textContent =
       value == null || (serverMetric && !fresh)
         ? "—"

@@ -16,6 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from runtime.gpu import validate_gpu, docker_gpu
 from runtime.streaming import (
     STREAMING_DEFAULTS,
     STREAMING_FIELDS,
@@ -177,6 +178,10 @@ def validate_profile(data):
             "XDG_RUNTIME_DIR",
             "GAMEDOCK_RESOLUTION",
             "GAMEDOCK_STREAMING",
+            "GAMEDOCK_GPU",
+            "GAMEDOCK_GPU_VENDOR",
+            "NVIDIA_VISIBLE_DEVICES",
+            "NVIDIA_DRIVER_CAPABILITIES",
             "GAMEDOCK_IDLE_FIX",
             "HOME",
         )
@@ -208,6 +213,7 @@ def validate_profile(data):
         raise ValueError("Game instance limit must be between 0 and 100")
     validate_resources(data, nullable=True)
     validate_streaming(data.get("streaming", {}))
+    validate_gpu(data.get("gpu", {}))
     return {
         k: data.get(k, default)
         for k, default in [
@@ -226,6 +232,7 @@ def validate_profile(data):
             ("memory_mb", None),
             ("cpus", None),
             ("streaming", {}),
+            ("gpu", {"vendor": "none"}),
         ]
     }
 
@@ -283,6 +290,9 @@ class Docker:
             },
             "ExposedPorts": {"6084/tcp": {}},
         }
+        gpu_host, gpu_env = docker_gpu(profile.get("gpu", {}))
+        definition["HostConfig"].update(gpu_host)
+        definition["Env"].extend(gpu_env)
         try:
             await self.request(
                 "POST",

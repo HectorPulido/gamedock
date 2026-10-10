@@ -1,0 +1,17 @@
+{
+  "id": "gpu-amd",
+  "name": "AMD OpenGL demo",
+  "image": "gamedock-runtime-gpu-amd:local",
+  "command": [
+    "glxgears"
+  ],
+  "resolutions": [
+    "1280x720"
+  ],
+  "env": {},
+  "gpu": {
+    "vendor": "amd",
+    "device": "/dev/dri/renderD128",
+    "groups": []
+  }
+}

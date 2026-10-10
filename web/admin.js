@@ -285,6 +285,7 @@ function editGame(game) {
     : "Create a game with a new ID. Saving an existing ID updates that game.";
   f.memory_mb.value = game?.memory_mb ?? "";
   f.cpus.value = game?.cpus ?? "";
+  fillGpu(game?.gpu || {});
   f.definition.value = JSON.stringify(
     game || {
       id: "my-game",
@@ -302,6 +303,7 @@ function editGame(game) {
       banner: "",
       env: {},
       streaming: {},
+      gpu: { vendor: "none" },
     },
     null,
     2,
@@ -325,6 +327,7 @@ $("#profile").elements.definition.addEventListener("input", (e) => {
     const game = JSON.parse(e.target.value);
     $("#profile").elements.memory_mb.value = game.memory_mb ?? "";
     $("#profile").elements.cpus.value = game.cpus ?? "";
+    fillGpu(game.gpu || {});
   } catch {}
 });
 for (const key of ["memory_mb", "cpus"])
@@ -336,6 +339,60 @@ for (const key of ["memory_mb", "cpus"])
       f.definition.value = JSON.stringify(game, null, 2);
     } catch {}
   });
+function fillGpu(gpu) {
+  const f = $("#profile").elements;
+  f.gpu_vendor.value = gpu.vendor || "none";
+  f.gpu_device.value =
+    gpu.device ||
+    (gpu.vendor === "nvidia"
+      ? "0"
+      : gpu.vendor && gpu.vendor !== "none"
+        ? "/dev/dri/renderD128"
+        : "");
+  f.gpu_groups.value = (gpu.groups || []).join(", ");
+  f.software_threads.value = gpu.software_threads ?? 0;
+  f.software_threads.disabled = f.gpu_vendor.value !== "none";
+  f.gpu_device.disabled = f.gpu_groups.disabled = f.gpu_vendor.value === "none";
+}
+function gpuFromForm(previous = {}) {
+  const f = $("#profile").elements;
+  if (f.gpu_vendor.value === "none")
+    return {
+      vendor: "none",
+      software_threads: Number(f.software_threads.value),
+    };
+  const raw = f.gpu_groups.value.trim();
+  if (raw && !/^\d+(?:\s*,\s*\d+)*$/.test(raw))
+    throw Error("GPU host group IDs must be comma-separated numbers");
+  const gpu = {
+    ...previous,
+    vendor: f.gpu_vendor.value,
+    device: f.gpu_device.value.trim(),
+    groups: raw ? raw.split(",").map(Number) : [],
+  };
+  if (gpu.vendor !== "nvidia" && gpu.vgl_display != null)
+    gpu.vgl_display = gpu.device;
+  return gpu;
+}
+for (const key of [
+  "gpu_vendor",
+  "gpu_device",
+  "gpu_groups",
+  "software_threads",
+]) {
+  $("#profile").elements[key].addEventListener("input", () => {
+    try {
+      const f = $("#profile").elements;
+      const game = JSON.parse(f.definition.value);
+      if (key === "gpu_vendor") {
+        fillGpu({ vendor: f.gpu_vendor.value });
+        delete game.gpu;
+      }
+      game.gpu = gpuFromForm(game.gpu);
+      f.definition.value = JSON.stringify(game, null, 2);
+    } catch {}
+  });
+}
 $("#profile").onsubmit = (e) => {
   e.preventDefault();
   action(async () => {
@@ -344,6 +401,7 @@ $("#profile").onsubmit = (e) => {
       const value = e.target.elements[key].value;
       game[key] = value === "" ? null : Number(value);
     }
+    game.gpu = gpuFromForm(game.gpu);
     await api("/admin/games", "PUT", game);
     profileEditing = false;
     await load();

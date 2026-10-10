@@ -21,6 +21,15 @@ class CaptureMetrics:
         self.total = 0
         self.lock = Lock()
         self.cpu_previous = None
+        try:
+            self.graphics = json.loads(
+                (
+                    Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp/gamedock-runtime"))
+                    / "gpu.json"
+                ).read_text()
+            )
+        except (OSError, ValueError):
+            self.graphics = {"enabled": False, "vendor": "none"}
 
     def read(self, elapsed, pixels):
         if self.enabled:
@@ -54,6 +63,9 @@ class CaptureMetrics:
             "capture_mpix_s": round(sum(r[2] for r in reads) / span / 1_000_000, 2),
             "target_hz": self.settings.get("refresh_rate", 30),
             "settings": self.settings,
+            "gpu_vendor": self.graphics.get("vendor", "none"),
+            "software_threads": self.graphics.get("software_threads", 0),
+            "gpu_renderer": self.graphics.get("renderer", "GPU acceleration disabled"),
             **self.cpu(now),
         }
 

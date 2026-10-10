@@ -1,0 +1,17 @@
+{
+  "id": "gpu-nvidia",
+  "name": "NVIDIA OpenGL demo",
+  "image": "gamedock-runtime-gpu-nvidia:local",
+  "command": [
+    "glxgears"
+  ],
+  "resolutions": [
+    "1280x720"
+  ],
+  "env": {},
+  "gpu": {
+    "vendor": "nvidia",
+    "device": "0",
+    "groups": []
+  }
+}
