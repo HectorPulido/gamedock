@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="/assets/notifications.css" />
     <script src="/assets/theme.js" defer></script>
     <script src="/assets/notifications.js" defer></script>
+    <script src="/assets/viewer-tools.js" defer></script>
     <script src="/assets/player.js" defer></script>
   </head>
   <body class="player">
@@ -26,8 +27,24 @@
           >View<select id="viewer-scale" aria-label="View">
             <option value="fit">Fit to space</option>
             <option value="original">Original size</option>
+            <option value="integer">Integer scale</option>
           </select></label
         >
+        <label class="viewer-scale"
+          >Pixels<select id="canvas-filter" aria-label="Canvas filter">
+            <option value="smooth">Smooth</option>
+            <option value="crisp">Crisp</option>
+          </select></label
+        >
+        <button id="viewer-defaults" class="secondary">Server defaults</button>
+        <button
+          id="diagnostics-toggle"
+          class="secondary"
+          aria-expanded="false"
+          aria-controls="streaming-diagnostics"
+        >
+          Diagnostics
+        </button>
         <button id="fullscreen" class="secondary" aria-pressed="false">
           Fullscreen
         </button>
@@ -38,6 +55,34 @@
       </div>
     </header>
     <div id="player-notice"></div>
+    <aside
+      id="streaming-diagnostics"
+      class="streaming-diagnostics"
+      aria-label="Streaming diagnostics"
+      hidden
+    >
+      <div class="diagnostics-heading">
+        <strong>Streaming diagnostics</strong
+        ><button
+          id="diagnostics-close"
+          class="secondary"
+          aria-label="Close diagnostics"
+        >
+          ×
+        </button>
+      </div>
+      <p id="diagnostics-status">Waiting for a sample…</p>
+      <dl id="diagnostics-values"></dl>
+      <p class="diagnostics-help">
+        Capture measures image reads. Delivered and decoded FPS use Xpra frame
+        boundaries; partial updates are counted separately. These are not the
+        game's FPS. A static screen can produce few updates.
+      </p>
+      <p class="diagnostics-help">
+        CPU: 100% = one core. Data/hour projects the current image payload rate
+        and excludes audio, protocol and TLS overhead.
+      </p>
+    </aside>
     <main id="desktop-stage">
       <iframe
         id="desktop-frame"

@@ -119,6 +119,28 @@ class API(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             validate_profile(profile)
 
+    async def test_coherent_versioned_assets_and_cache_policy(self):
+        response = await self.client.get("/")
+        document = await response.text()
+        version = response.headers["X-GameDock-Build"]
+        self.assertEqual(len(version), 64)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn("/assets/" + version + "/app.js", document)
+        self.assertIn("/assets/" + version + "/style.css", document)
+        current = await self.client.get("/assets/" + version + "/app.js")
+        self.assertEqual(current.status, 200)
+        self.assertIn("immutable", current.headers["Cache-Control"])
+        self.assertEqual(current.headers["X-GameDock-Build"], version)
+        legacy = await self.client.get("/assets/app.js")
+        self.assertEqual(await legacy.read(), await current.read())
+        self.assertEqual(legacy.headers["Cache-Control"], "no-store")
+        stale = await self.client.get("/assets/" + "0" * 64 + "/app.js")
+        self.assertEqual(stale.status, 410)
+        self.assertEqual(stale.headers["Cache-Control"], "no-store")
+        self.assertNotIn("const $", await stale.text())
+        missing = await self.client.get("/assets/" + version + "/unknown.js")
+        self.assertEqual(missing.status, 404)
+
     async def test_accounts_ownership_and_revocation(self):
         alice = await self.login()
         bob = await self.login("bob")

@@ -32,6 +32,37 @@ def toggle(label, default, group, help=""):
 
 
 STREAMING_FIELDS = {
+    "viewer_scale": choice(
+        "Default viewer size",
+        "fit",
+        ["fit", "original", "integer"],
+        "Viewer",
+        "Fit fills available space; integer uses whole-number enlargement when space allows.",
+    ),
+    "canvas_filter": choice(
+        "Default canvas filter",
+        "smooth",
+        ["smooth", "crisp"],
+        "Viewer",
+        "Smooth blends enlarged pixels; crisp keeps pixel edges sharp.",
+    ),
+    "restore_focus": toggle(
+        "Return keyboard focus after header controls", True, "Viewer"
+    ),
+    "diagnostics_enabled": toggle(
+        "Enable streaming diagnostics",
+        True,
+        "Diagnostics",
+        "Capture counters are lightweight. Full statistics are requested only while the panel is open.",
+    ),
+    "metrics_interval": number(
+        "Diagnostic sample interval (seconds)",
+        2,
+        1,
+        10,
+        "Diagnostics",
+        help="Longer samples reduce diagnostic traffic and smooth fluctuating rates.",
+    ),
     "quality": number(
         "Fixed quality",
         0,

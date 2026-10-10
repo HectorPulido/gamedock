@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import html
 import math
+import mimetypes
 import json
 import os
 import re
@@ -406,16 +407,17 @@ def user(request, admin=False):
 
 
 def config(app):
+    saved = json.loads(
+        app["db"].execute("SELECT value FROM settings WHERE id=1").fetchone()[0]
+    )
     return {
         "desktop_toolbar": DESKTOP_TOOLBAR,
         "invite_required": True,
         "idle_minutes": 30,
         **RESOURCE_DEFAULTS,
         "appearance": {},
-        "streaming": dict(STREAMING_DEFAULTS),
-        **json.loads(
-            app["db"].execute("SELECT value FROM settings WHERE id=1").fetchone()[0]
-        ),
+        **saved,
+        "streaming": {**STREAMING_DEFAULTS, **saved.get("streaming", {})},
     }
 
 
@@ -1133,9 +1135,43 @@ async def admin_page(request):
 
 async def platform_page(request, filename="index.html"):
     name = html.escape(config(request.app)["name"])
-    document = (ROOT / "web" / filename).read_text().replace("GameDock", name)
+    document = request.app["pages"][filename].replace("GameDock", name)
+    document = document.replace(
+        '"/assets/', '"/assets/' + request.app["asset_version"] + "/"
+    )
     return web.Response(
-        text=document, content_type="text/html", headers={"Cache-Control": "no-store"}
+        text=document,
+        content_type="text/html",
+        headers={
+            "Cache-Control": "no-store",
+            "X-GameDock-Build": request.app["asset_version"],
+        },
+    )
+
+
+async def asset(request):
+    path = request.match_info["path"]
+    versioned = "/" in path
+    if versioned:
+        version, path = path.split("/", 1)
+        if version != request.app["asset_version"]:
+            return web.Response(
+                status=410,
+                text="The interface has been updated. Reload this page.",
+                headers={"Cache-Control": "no-store"},
+            )
+    data = request.app["assets"].get(path)
+    if data is None:
+        raise web.HTTPNotFound()
+    return web.Response(
+        body=data,
+        content_type=mimetypes.guess_type(path)[0] or "application/octet-stream",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable"
+            if versioned
+            else "no-store",
+            "X-GameDock-Build": request.app["asset_version"],
+        },
     )
 
 
@@ -1144,6 +1180,19 @@ def create_app(db_path=None, docker=None):
 
     app = web.Application(middlewares=[security], client_max_size=64 * 1024)
     app["logger"] = logging.getLogger("gamedock")
+    # Freeze a coherent bundle at startup, including HTML referencing its version.
+    files = {
+        p.name: p.read_bytes() for p in sorted((ROOT / "web").iterdir()) if p.is_file()
+    }
+    app["assets"] = {
+        name: data for name, data in files.items() if not name.endswith(".html")
+    }
+    app["pages"] = {
+        name: data.decode() for name, data in files.items() if name.endswith(".html")
+    }
+    app["asset_version"] = hashlib.sha256(
+        b"".join(name.encode() + b"\0" + data for name, data in files.items())
+    ).hexdigest()
     app["origin"] = os.getenv("PUBLIC_URL", "http://localhost:8080").rstrip("/")
     path = db_path or os.getenv("DATABASE", "/data/gamedock.sqlite")
     if path != ":memory:":
@@ -1234,7 +1283,7 @@ def create_app(db_path=None, docker=None):
     app.router.add_get("/", platform_page)
     app.router.add_get("/admin", admin_page)
     app.router.add_get("/admin/", admin_page)
-    app.router.add_static("/assets/", ROOT / "web")
+    app.router.add_get("/assets/{path:.*}", asset)
     return app
 
 

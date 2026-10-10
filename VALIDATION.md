@@ -117,3 +117,19 @@ outside Git. Resource changes affect new sessions and do not restart games.
 - Browser regression suites pass for the separate administrator workspace, customization/scaling/fullscreen, and OpenTTD game creation, invitations and account limits.
 - Both `gamedock-runtime:local` and the derived OpenTTD image were rebuilt; existing user game containers were preserved.
 - Floating-notification browser checks pass for expiry, dismiss, errors, navigation persistence, polling deduplication, unchanged viewer layout/focus, fullscreen/mobile and the stopped-session state.
+
+## Viewer quality diagnostics (2026-10-10)
+
+- 24 host tests run: 22 pass and two Xpra-only checks skip on the host.
+- Added API coverage for a coherent frozen HTML/CSS/JS bundle, immutable asset
+  versions and rejection of unavailable versions instead of mixing files.
+- Added capture counter coverage for successful reads, independent refresh-loop
+  frequency, idle expiry and disabled instrumentation.
+- A real animated xterm verifies positive capture, delivery, decode and image
+  payload rates, source resolution unchanged, integer scaling, crisp filtering,
+  keyboard input after header controls and no statistics polling after closing.
+- Runtime telemetry uses decimal strings on the wire because Xpra HTML5's
+  rencodeplus decoder does not support float64. The viewer converts numeric
+  telemetry back to numbers without losing decimal precision.
+- Transmission FPS are measured from Xpra frame boundaries; they do not measure
+  the game engine. Image throughput excludes audio and transport overhead.

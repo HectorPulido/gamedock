@@ -378,7 +378,7 @@ The workspace separates **Access**, **Games**, **Platform**, **Appearance**, and
 
 Open **Administration → Streaming** to adjust picture quality, capture rate,
 bandwidth, compression, codecs, shared-memory capture and input latency. The
-22 controls include all optimizations adapted from Dofus: short frame queues,
+27 controls include all optimizations adapted from Dofus: short frame queues,
 immediate TCP delivery, XSHM capture and recovery after browser inactivity.
 Encoder downscaling is disabled by default. Expanding the viewer still leaves
 the game resolution unchanged.
@@ -418,3 +418,25 @@ hovered or focused. Notifications follow the selected theme and remain visible
 in fullscreen without resizing the game or capturing its keyboard focus.
 Repeated polling errors and inactivity warnings are deduplicated. An ended
 session shows a clear return-to-library state instead of a blank iframe.
+
+### Viewer diagnostics and scaling
+
+The player offers fit, original-size and integer scaling, plus smooth/crisp canvas
+filters. These change presentation, not the source resolution or missing detail.
+Administration → Streaming sets defaults, automatic keyboard-focus recovery,
+diagnostics availability and the sample interval (1–10 seconds). Viewer scale
+and filter choices are remembered locally; Server defaults resets them.
+
+Open Diagnostics to compare successful capture reads, capture-loop frequency,
+received Xpra frame boundaries and decode acknowledgements. Partial updates are
+counted separately; these are transmission measurements, not game-engine FPS.
+A static screen may legitimately send few updates. Image Mbps and projected
+GB/hour count image payload only, excluding audio, protocol and TLS overhead.
+CPU separates game processes from Xpra/display processes; 100% is one core.
+Memory sums process RSS and may count shared pages more than once. Statistics
+requests stop when the panel closes or the tab is hidden. Capture instrumentation
+requires a newly launched instance from the rebuilt runtime image.
+
+Portal HTML references a single content-versioned CSS/JS bundle frozen at startup.
+Versioned assets are immutable; unavailable old versions return 410 and require
+a reload, preventing a page from silently combining incompatible asset versions.

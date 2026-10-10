@@ -137,3 +137,60 @@ body.player {
   max-width: 400px;
   line-height: 1.5;
 }
+
+.streaming-diagnostics {
+  position: fixed;
+  z-index: 50;
+  top: 90px;
+  left: 16px;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 40px #0003;
+}
+.diagnostics-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.diagnostics-heading button {
+  padding: 2px 9px;
+  color: var(--text);
+}
+#diagnostics-status,
+.diagnostics-help {
+  margin: 10px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+#diagnostics-values {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 7px 12px;
+  font-size: 12px;
+  margin: 16px 0;
+}
+#diagnostics-values dt {
+  color: var(--muted);
+}
+#diagnostics-values dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  max-width: 190px;
+}
+@media (max-width: 700px) {
+  .streaming-diagnostics {
+    top: auto;
+    bottom: 12px;
+    max-height: 65dvh;
+  }
+}

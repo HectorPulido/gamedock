@@ -3,12 +3,52 @@ const frame = document.querySelector("#desktop-frame");
 const stage = document.querySelector("#desktop-stage");
 const notify = (text, options = {}) =>
   GameDockNotifications.show(text, options);
+const viewer = GameDockViewer.create(frame);
+const scaleControl = document.querySelector("#viewer-scale");
+const filterControl = document.querySelector("#canvas-filter");
+const diagnostics = document.querySelector("#streaming-diagnostics");
+let diagnosticTimer;
+let viewerSettings = {};
+function preference(key) {
+  try {
+    return localStorage.getItem("gamedock-" + key);
+  } catch {
+    return null;
+  }
+}
+function savePreference(key, value) {
+  try {
+    localStorage.setItem("gamedock-" + key, value);
+  } catch {}
+}
+function returnFocus() {
+  if (viewerSettings.restore_focus !== false)
+    requestAnimationFrame(() => viewer.focus());
+}
+function applyViewerSettings() {
+  viewerSettings = settings.streaming || {};
+  scaleControl.value =
+    preference("viewer-scale") || viewerSettings.viewer_scale || "fit";
+  filterControl.value =
+    preference("canvas-filter") || viewerSettings.canvas_filter || "smooth";
+  if (!["fit", "original", "integer"].includes(scaleControl.value))
+    scaleControl.value = "fit";
+  if (!["smooth", "crisp"].includes(filterControl.value))
+    filterControl.value = "smooth";
+  viewer.filter(filterControl.value);
+  document.querySelector("#diagnostics-toggle").hidden =
+    viewerSettings.diagnostics_enabled === false;
+  if (viewerSettings.diagnostics_enabled === false && !diagnostics.hidden)
+    toggleDiagnostics(false);
+}
 let stopped = false;
 function stoppedDesktop() {
   if (stopped) return;
   stopped = true;
   frame.hidden = true;
   frame.removeAttribute("src");
+  clearInterval(diagnosticTimer);
+  viewer.dispose();
   const empty = document.createElement("section");
   empty.className = "desktop-stopped";
   const title = document.createElement("h1");
@@ -53,9 +93,11 @@ function fit() {
     stage.clientHeight / height,
   );
   const scale =
-    document.querySelector("#viewer-scale").value === "original"
+    scaleControl.value === "original"
       ? Math.min(1, available)
-      : available;
+      : scaleControl.value === "integer" && available >= 1
+        ? Math.max(1, Math.floor(available))
+        : available;
   frame.style.transform = `translate(-50%, -50%) scale(${scale})`;
 }
 new ResizeObserver(fit).observe(stage);
@@ -87,6 +129,8 @@ for (const type of [
   document.addEventListener(type, input, { capture: true, passive: true });
 frame.addEventListener("load", () => {
   if (stopped || !frame.getAttribute("src")) return;
+  viewer.dispose();
+  viewer.filter(filterControl.value);
   try {
     const doc = frame.contentDocument;
     for (const type of [
@@ -124,6 +168,7 @@ async function refresh() {
   }
   settings = catalog.settings;
   GameDockTheme.apply(settings);
+  applyViewerSettings();
   document.querySelector("#brand").textContent = settings.name;
   const list = (await api("/instances")).filter(
     (i) => i.uid === catalog.user.id && i.status === "running",
@@ -184,7 +229,10 @@ async function refresh() {
   }
 }
 document.querySelector("#stop-instance").onclick = async () => {
-  if (!confirm("Stop this instance? Save your game before continuing.")) return;
+  if (!confirm("Stop this instance? Save your game before continuing.")) {
+    returnFocus();
+    return;
+  }
   try {
     await api("/instances/" + sid, "DELETE", {});
     GameDockNotifications.remember("Instance stopped.", { kind: "success" });
@@ -204,17 +252,123 @@ setInterval(
   15000,
 );
 
-const scaleControl = document.querySelector("#viewer-scale");
-try {
-  scaleControl.value = localStorage.getItem("gamedock-viewer-scale") || "fit";
-} catch {}
-if (!["fit", "original"].includes(scaleControl.value))
-  scaleControl.value = "fit";
 scaleControl.addEventListener("change", () => {
-  try {
-    localStorage.setItem("gamedock-viewer-scale", scaleControl.value);
-  } catch {}
+  savePreference("viewer-scale", scaleControl.value);
   fit();
+  returnFocus();
+});
+filterControl.addEventListener("change", () => {
+  savePreference("canvas-filter", filterControl.value);
+  viewer.filter(filterControl.value);
+  returnFocus();
+});
+document.querySelector("#viewer-defaults").onclick = () => {
+  try {
+    localStorage.removeItem("gamedock-viewer-scale");
+    localStorage.removeItem("gamedock-canvas-filter");
+  } catch {}
+  applyViewerSettings();
+  fit();
+  returnFocus();
+};
+const metrics = [
+  ["capture_fps", "Capture FPS", "fps"],
+  ["capture_cycles_fps", "Capture loop", "Hz"],
+  ["delivered_fps", "Delivered FPS", "fps"],
+  ["decoded_fps", "Decoded FPS", "fps"],
+  ["delivered_updates", "Delivered updates", "/s"],
+  ["decoded_updates", "Decoded updates", "/s"],
+  ["capture_ms", "Capture time", "ms"],
+  ["decode_ms", "Client decode / paint time", "ms"],
+  ["roundtrip_ms", "Client latency", "ms"],
+  ["image_mbps", "Image payload", "Mbps"],
+  ["hourly_gb", "Estimated image data", "GB/hour"],
+  ["game_cpu_percent", "Game CPU", "%"],
+  ["stream_cpu_percent", "Xpra / display CPU", "%"],
+  ["game_rss_mb", "Game process memory", "MiB"],
+  ["stream_rss_mb", "Streaming process memory", "MiB"],
+  ["codecs", "Observed codecs", ""],
+  ["decode_errors", "Decode errors", ""],
+  ["geometry", "Source → displayed", ""],
+  ["canvas", "Canvas backing size", ""],
+];
+const values = document.querySelector("#diagnostics-values");
+for (const [key, label] of metrics) {
+  const title = document.createElement("dt");
+  title.textContent = label;
+  const value = document.createElement("dd");
+  value.dataset.metric = key;
+  value.textContent = "—";
+  values.append(title, value);
+}
+function sampleDiagnostics() {
+  if (diagnostics.hidden || stopped || document.hidden) return;
+  const sample = viewer.sample();
+  sample.hourly_gb =
+    sample.image_mbps == null ? null : (sample.image_mbps * 3600) / 8 / 1000;
+  const box = frame.getBoundingClientRect();
+  sample.geometry = current
+    ? current.resolution +
+      " → " +
+      Math.round(box.width) +
+      "×" +
+      Math.round(box.height)
+    : "—";
+  try {
+    const canvas = frame.contentDocument.querySelector("canvas");
+    sample.canvas = canvas ? canvas.width + "×" + canvas.height : "—";
+  } catch {}
+  const fresh =
+    sample.server_age != null &&
+    sample.server_age < (viewerSettings.metrics_interval || 2) * 3;
+  const status = document.querySelector("#diagnostics-status");
+  status.textContent = !sample.connected
+    ? "Connecting to Xpra…"
+    : sample.server_age == null
+      ? "Waiting for server capture metrics…"
+      : !fresh
+        ? "Server sample is stale; waiting for a fresh response."
+        : sample.enabled == null
+          ? "Capture metrics unavailable in this runtime. Launch a new instance after updating its image."
+          : sample.enabled === false
+            ? "Capture diagnostics were disabled when this instance started."
+            : "Live sample · capture target " + sample.target_hz + " Hz";
+  for (const [key, , unit] of metrics) {
+    const value = sample[key];
+    const serverMetric = /^(capture|game_|stream_)/.test(key);
+    values.querySelector('[data-metric="' + key + '"]').textContent =
+      value == null || (serverMetric && !fresh)
+        ? "—"
+        : (typeof value === "number"
+            ? value.toFixed(key === "decode_errors" ? 0 : 1)
+            : value) + (unit ? " " + unit : "");
+  }
+}
+function toggleDiagnostics(open) {
+  diagnostics.hidden = !open;
+  document
+    .querySelector("#diagnostics-toggle")
+    .setAttribute("aria-expanded", String(open));
+  clearInterval(diagnosticTimer);
+  if (open) {
+    sampleDiagnostics();
+    diagnosticTimer = setInterval(
+      sampleDiagnostics,
+      (viewerSettings.metrics_interval || 2) * 1000,
+    );
+  }
+}
+document.querySelector("#diagnostics-toggle").onclick = () => {
+  toggleDiagnostics(diagnostics.hidden);
+  returnFocus();
+};
+document.querySelector("#diagnostics-close").onclick = () => {
+  toggleDiagnostics(false);
+  returnFocus();
+};
+window.addEventListener("pagehide", () => {
+  clearInterval(diagnosticTimer);
+  viewer.dispose();
 });
 const fullscreenButton = document.querySelector("#fullscreen");
 fullscreenButton.hidden = !document.fullscreenEnabled;
@@ -234,4 +388,5 @@ document.addEventListener("fullscreenchange", () => {
   fullscreenButton.textContent = active ? "Exit fullscreen" : "Fullscreen";
   fullscreenButton.setAttribute("aria-pressed", String(active));
   requestAnimationFrame(fit);
+  returnFocus();
 });

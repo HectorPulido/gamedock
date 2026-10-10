@@ -160,6 +160,7 @@ with sync_playwright() as p:
         remote = rendered(page)
         centered(page)
         expect(page.locator("#brand")).to_have_text("miservidor")
+        page.locator("#viewer-scale").select_option("fit")
         assert page.locator("#desktop-frame").bounding_box()["width"] > 1280
         # The iframe's layout viewport and X display resolution remain fixed.
         assert remote.evaluate("innerWidth") == 1280
