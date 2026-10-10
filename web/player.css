@@ -96,9 +96,6 @@ body.player {
     font-size: 12px;
     padding: 7px;
   }
-  #stop-instance {
-    display: none;
-  }
 }
 
 .viewer-scale {
@@ -193,4 +190,60 @@ body.player {
     bottom: 12px;
     max-height: 65dvh;
   }
+}
+
+/* Keep the playing surface prominent; secondary controls live in one dialog. */
+#player-settings {
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--player-header);
+  color: var(--player-text);
+  box-shadow: 0 24px 80px #0006;
+}
+#player-settings::backdrop {
+  background: #0008;
+}
+.settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.settings-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.settings-heading button {
+  padding: 4px 10px;
+  font-size: 22px;
+}
+.settings-description {
+  font-size: 14px;
+  opacity: 0.7;
+  margin: 12px 0 24px;
+}
+.display-options {
+  display: grid;
+  gap: 14px;
+}
+.display-options .viewer-scale {
+  justify-content: space-between;
+}
+.display-options select {
+  width: 65%;
+}
+.session-options {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  margin-top: 20px;
+}
+.session-options button {
+  width: 100%;
+}
+.player-actions {
+  align-items: center;
 }

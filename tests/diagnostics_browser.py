@@ -83,6 +83,7 @@ with sync_playwright() as p:
             delay=5,
         )
         page.keyboard.press("Enter")
+        page.locator("#player-settings-toggle").click()
         page.locator("#diagnostics-toggle").click()
         for metric in ("capture_fps", "delivered_fps", "decoded_fps", "image_mbps"):
             page.wait_for_function(
@@ -105,14 +106,18 @@ with sync_playwright() as p:
         page.screenshot(path=str(ARTIFACTS / "diagnostics-live.png"))
         page.locator("#diagnostics-close").click()
         page.wait_for_timeout(11000)
+        page.locator("#player-settings-toggle").click()
         page.locator("#viewer-scale").select_option("fit")
+        page.locator("#player-settings-close").click()
         page.wait_for_timeout(200)
         page.keyboard.type("printf header-focus-ok > /data/header-focus.txt", delay=15)
         page.keyboard.press("Enter")
         page.wait_for_timeout(750)
         page.screenshot(path=str(ARTIFACTS / "focus-debug.png"))
         assert run(sid, ["cat", "/data/header-focus.txt"]) == "header-focus-ok"
+        page.locator("#player-settings-toggle").click()
         page.locator("#canvas-filter").select_option("smooth")
+        page.locator("#player-settings-close").click()
         page.wait_for_timeout(200)
         page.keyboard.type("printf filter-focus-ok > /data/filter-focus.txt", delay=15)
         page.keyboard.press("Enter")

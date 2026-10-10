@@ -21,7 +21,25 @@ function savePreference(key, value) {
     localStorage.setItem("gamedock-" + key, value);
   } catch {}
 }
+const settingsDialog = document.querySelector("#player-settings");
+document.querySelector("#player-settings-toggle").onclick = () =>
+  settingsDialog.showModal();
+document.querySelector("#player-settings-close").onclick = () =>
+  settingsDialog.close();
+settingsDialog.addEventListener("click", (event) => {
+  if (event.target !== settingsDialog) return;
+  const rect = settingsDialog.getBoundingClientRect();
+  if (
+    event.clientX < rect.left ||
+    event.clientX > rect.right ||
+    event.clientY < rect.top ||
+    event.clientY > rect.bottom
+  )
+    settingsDialog.close();
+});
+settingsDialog.addEventListener("close", returnFocus);
 function returnFocus() {
+  if (settingsDialog.open) return;
   if (viewerSettings.restore_focus !== false)
     requestAnimationFrame(() => viewer.focus());
 }
@@ -365,6 +383,7 @@ function toggleDiagnostics(open) {
   }
 }
 document.querySelector("#diagnostics-toggle").onclick = () => {
+  settingsDialog.close();
   toggleDiagnostics(diagnostics.hidden);
   returnFocus();
 };

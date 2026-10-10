@@ -111,6 +111,7 @@ with sync_playwright() as p:
         })""",
             timeout=20000,
         )
+        page.locator("#player-settings-toggle").click()
         page.locator("#diagnostics-toggle").click()
         page.wait_for_function(
             "document.querySelector('[data-metric=\"gpu_renderer\"]').textContent.includes('llvmpipe')",

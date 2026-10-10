@@ -160,7 +160,9 @@ with sync_playwright() as p:
         remote = rendered(page)
         centered(page)
         expect(page.locator("#brand")).to_have_text("miservidor")
+        page.locator("#player-settings-toggle").click()
         page.locator("#viewer-scale").select_option("fit")
+        page.locator("#player-settings-close").click()
         assert page.locator("#desktop-frame").bounding_box()["width"] > 1280
         # The iframe's layout viewport and X display resolution remain fixed.
         assert remote.evaluate("innerWidth") == 1280
@@ -180,9 +182,13 @@ with sync_playwright() as p:
             )
 
         assert b"1280x720 pixels" in resolution()
+        page.locator("#player-settings-toggle").click()
         page.locator("#viewer-scale").select_option("original")
+        page.locator("#player-settings-close").click()
         assert page.locator("#desktop-frame").bounding_box()["width"] == 1280
+        page.locator("#player-settings-toggle").click()
         page.locator("#viewer-scale").select_option("fit")
+        page.locator("#player-settings-close").click()
         canvas = remote.locator("canvas").first.bounding_box()
         page.mouse.click(
             canvas["x"] + canvas["width"] / 2, canvas["y"] + canvas["height"] / 2

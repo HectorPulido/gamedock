@@ -23,6 +23,40 @@
       >
       <nav id="session-tabs" aria-label="Running instances"></nav>
       <div class="player-actions">
+        <button id="fullscreen" class="secondary" aria-pressed="false">
+          Fullscreen
+        </button>
+        <button
+          id="player-settings-toggle"
+          class="secondary"
+          aria-haspopup="dialog"
+          aria-controls="player-settings"
+        >
+          Settings
+        </button>
+        <a class="button secondary" href="/" aria-label="Back to library"
+          >Back</a
+        >
+        <button id="stop-instance" class="danger" aria-label="Stop instance">
+          Stop
+        </button>
+      </div>
+    </header>
+    <dialog id="player-settings" aria-labelledby="player-settings-title">
+      <div class="settings-heading">
+        <h2 id="player-settings-title">Display settings</h2>
+        <button
+          id="player-settings-close"
+          class="secondary"
+          aria-label="Close settings"
+        >
+          ×
+        </button>
+      </div>
+      <p class="settings-description">
+        Adjust how the desktop appears on this device.
+      </p>
+      <div class="display-options">
         <label class="viewer-scale"
           >View<select id="viewer-scale" aria-label="View">
             <option value="fit">Fit to space</option>
@@ -45,15 +79,13 @@
         >
           Diagnostics
         </button>
-        <button id="fullscreen" class="secondary" aria-pressed="false">
-          Fullscreen
-        </button>
-        <button id="previous" class="secondary" disabled>
-          Previous instance</button
-        ><a class="button secondary" href="/">Back to library</a
-        ><button id="stop-instance" class="danger">Stop instance</button>
       </div>
-    </header>
+      <div class="session-options">
+        <button id="previous" class="secondary" disabled>
+          Previous instance
+        </button>
+      </div>
+    </dialog>
     <div id="player-notice"></div>
     <aside
       id="streaming-diagnostics"
