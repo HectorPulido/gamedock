@@ -1,0 +1,112 @@
+.toast-region {
+  position: fixed;
+  z-index: 1000;
+  top: 88px;
+  right: 16px;
+  width: min(360px, calc(100vw - 32px));
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+.toast {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 28px;
+  gap: 11px;
+  padding: 14px 12px 17px;
+  overflow: hidden;
+  border: 1px solid var(--border, var(--line));
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 40px #0003;
+  pointer-events: auto;
+  animation: toast-in 0.24s ease-out;
+}
+.toast-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 20px;
+  font-weight: bold;
+}
+.toast.error .toast-mark {
+  background: var(--danger);
+  color: #fff;
+}
+.toast-copy {
+  min-width: 0;
+}
+.toast-copy strong {
+  display: block;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.toast-copy p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.toast-close {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 23px;
+  line-height: 1;
+}
+.toast-close:hover {
+  background: color-mix(in srgb, var(--text), transparent 92%);
+  color: var(--text);
+}
+.toast-timer {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: toast-timer linear forwards;
+}
+.toast.error .toast-timer {
+  background: var(--danger);
+}
+.toast.paused .toast-timer {
+  animation-play-state: paused;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes toast-timer {
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (max-width: 700px) {
+  .toast-region {
+    top: auto;
+    bottom: 16px;
+    right: 12px;
+    width: min(360px, calc(100vw - 24px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}

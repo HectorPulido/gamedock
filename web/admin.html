@@ -6,7 +6,9 @@
     <title>GameDock | Administration</title>
     <link rel="stylesheet" href="/assets/style.css" />
     <link rel="stylesheet" href="/assets/admin.css" />
+    <link rel="stylesheet" href="/assets/notifications.css" />
     <script src="/assets/theme.js" defer></script>
+    <script src="/assets/notifications.js" defer></script>
     <script src="/assets/admin.js" defer></script>
   </head>
   <body class="admin-page">
@@ -28,14 +30,13 @@
         <a href="#games">Games</a>
         <a href="#platform">Platform</a>
         <a href="#appearance">Appearance</a>
+        <a href="#streaming">Streaming</a>
         <a href="#instances">Instances</a>
       </nav>
       <p class="admin-operator" id="admin-operator"></p>
     </aside>
     <main class="admin-main" id="admin-main">
-      <p id="notice" role="status" aria-live="polite">
-        Loading administration…
-      </p>
+      <div id="notice"></div>
       <div id="admin-workspace" hidden>
         <section
           id="section-access"
@@ -127,6 +128,12 @@
           </div>
           <div class="admin-panel" id="game-editor">
             <form id="profile">
+              <p class="help">
+                Optional <code>streaming</code> values in the JSON override
+                Streaming defaults for this game. Use
+                <code>"streaming": {}</code> to inherit all defaults. Existing
+                instances keep their original settings.
+              </p>
               <h3 id="profile-title">Add game</h3>
               <p id="profile-mode-help">
                 Create a game with a new ID. Use Edit on a game card to modify
@@ -171,6 +178,53 @@
                 </button>
               </div>
               <p id="profile-help" role="status"></p>
+            </form>
+          </div>
+        </section>
+        <section
+          id="section-streaming"
+          class="admin-section"
+          aria-labelledby="streaming-title"
+          hidden
+        >
+          <div class="workspace-title">
+            <h1 id="streaming-title" tabindex="-1">Streaming</h1>
+            <p>
+              Choose picture quality, responsiveness and connection limits. The
+              game resolution stays unchanged.
+            </p>
+          </div>
+          <div class="admin-panel">
+            <h2>Streaming defaults</h2>
+            <p>
+              Changes apply to newly launched instances. Existing games keep
+              their settings.
+            </p>
+            <div
+              class="actions"
+              id="streaming-presets"
+              aria-label="Streaming presets"
+            >
+              <button type="button" data-streaming-preset="balanced">
+                Balanced
+              </button>
+              <button type="button" data-streaming-preset="sharp">
+                Sharp picture
+              </button>
+              <button type="button" data-streaming-preset="low_latency">
+                Dofus low latency
+              </button>
+              <button type="button" data-streaming-preset="lossless">
+                Lossless picture
+              </button>
+            </div>
+            <p class="help">
+              Presets fill the form; save to apply. Lossless picture uses more
+              bandwidth.
+            </p>
+            <form id="streaming-settings">
+              <div id="streaming-fields"></div>
+              <button type="submit">Save streaming settings</button>
             </form>
           </div>
         </section>

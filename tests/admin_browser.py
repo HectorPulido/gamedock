@@ -167,7 +167,14 @@ with sync_playwright() as p:
         assert page.request.put(
             URL + "/api/admin/settings", data={"appearance": original}
         ).ok
-        for section in ("access", "games", "platform", "appearance", "instances"):
+        for section in (
+            "access",
+            "games",
+            "platform",
+            "appearance",
+            "streaming",
+            "instances",
+        ):
             page.goto(URL + "/admin#" + section)
             expect(page.locator("#section-" + section)).to_be_visible()
             page.set_viewport_size({"width": 390, "height": 844})

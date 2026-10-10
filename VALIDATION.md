@@ -107,3 +107,13 @@ outside Git. Resource changes affect new sessions and do not restart games.
 - Chromium verifies identical player/admin game cards, a single administrator link, automatic launch, and own instances in the library.
 - Workspace checks cover account/game/instance searches, preserved drafts, browser history, bookmarked sections, all three themes, and mobile layouts.
 - Customization regression passes: branding, appearance preview/import/export, real Docker CPU/RAM limits, scaled input, unchanged desktop resolution, fullscreen, and mobile.
+
+## Configurable streaming and floating notifications (2026-10-10)
+
+- 19 host API/configuration tests pass; two Xpra-specific tests are skipped on the host and pass inside the rebuilt runtime image.
+- The idle regression exercises both enabled and disabled recovery of an independently idle window while the connection remains active.
+- Chromium verifies all 22 streaming controls, draft presets, saved/reloaded values, invalid combinations, four real rendered Xpra sessions, and per-game overrides.
+- Actual runtime checks cover XSHM attachment, server arguments, negotiated browser quality, bandwidth settings, mouse/keyboard input, and unchanged 1280×720 display resolution.
+- Browser regression suites pass for the separate administrator workspace, customization/scaling/fullscreen, and OpenTTD game creation, invitations and account limits.
+- Both `gamedock-runtime:local` and the derived OpenTTD image were rebuilt; existing user game containers were preserved.
+- Floating-notification browser checks pass for expiry, dismiss, errors, navigation persistence, polling deduplication, unchanged viewer layout/focus, fullscreen/mobile and the stopped-session state.

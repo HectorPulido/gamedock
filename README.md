@@ -373,3 +373,48 @@ the same disposable QA deployment and browser environment as the other suites.
 Players and administrators share the same library and automatic game launch. The only extra control for administrators is **Administration**, which opens the protected `/admin` page. The library shows only your own instances.
 
 The workspace separates **Access**, **Games**, **Platform**, **Appearance**, and **Instances**. Search accounts, game profiles, or active instances; section links can be bookmarked, and switching sections preserves unsaved form values. Administrators can launch a game with a selected test resolution from **Games**.
+
+### Streaming quality and responsiveness
+
+Open **Administration → Streaming** to adjust picture quality, capture rate,
+bandwidth, compression, codecs, shared-memory capture and input latency. The
+22 controls include all optimizations adapted from Dofus: short frame queues,
+immediate TCP delivery, XSHM capture and recovery after browser inactivity.
+Encoder downscaling is disabled by default. Expanding the viewer still leaves
+the game resolution unchanged.
+
+Presets fill the form without saving: **Balanced**, **Sharp picture**, **Dofus
+low latency**, and **Lossless picture**. Save to use the chosen values for new
+instances. Active instances keep their original configuration. Codec choices
+are negotiated with the browser; explicit encoder choices require those codecs
+in the runtime image. Lossless PNG/RGB preserves detail but uses more bandwidth.
+
+Game profiles can override individual values in their JSON definition:
+
+```json
+"streaming": {
+  "quality": 95,
+  "min_quality": 85,
+  "refresh_rate": 30,
+  "bandwidth_mbps": 0
+}
+```
+
+An empty `streaming` object inherits all platform defaults. API writes to
+`/api/admin/settings` merge `streaming` values; game profile writes replace their
+overrides. Quality and speed use 0 for automatic adjustment; bandwidth uses
+0 for no fixed limit. Queue values must satisfy minimum ≤ initial ≤ maximum.
+
+Rebuild `gamedock-runtime:local` and game images derived from it when upgrading
+the runtime. Merely rebuilding the portal cannot update Xpra inside an existing
+image. The idle recovery patch checks its source targets during the build and
+fails explicitly if a future Xpra version needs a different patch.
+
+### Floating notifications
+
+Status messages and errors appear as small floating notifications, adapted from
+the Dofus portal. They can be dismissed, expire automatically and pause while
+hovered or focused. Notifications follow the selected theme and remain visible
+in fullscreen without resizing the game or capturing its keyboard focus.
+Repeated polling errors and inactivity warnings are deduplicated. An ended
+session shows a clear return-to-library state instead of a blank iframe.

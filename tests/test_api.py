@@ -49,6 +49,76 @@ class API(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, 200, await result.text())
         return {"Authorization": "Bearer " + (await result.json())["token"]}
 
+    async def test_streaming_permissions_inheritance_and_saved_defaults(self):
+        admin = await self.login("admin", "login")
+        alice = await self.login()
+        response = await self.client.put(
+            "/api/admin/settings", headers=alice, json={"streaming": {"quality": 95}}
+        )
+        self.assertEqual(response.status, 403)
+        for invalid in (
+            {"quality": 101},
+            {"idle_fix": "yes"},
+            {"batch_min_delay": 50},
+            {"evil": 1},
+        ):
+            response = await self.client.put(
+                "/api/admin/settings", headers=admin, json={"streaming": invalid}
+            )
+            self.assertEqual(response.status, 400)
+        response = await self.client.post(
+            "/api/instances", headers=admin, json={"game": "desktop"}
+        )
+        first = (await response.json())["id"]
+        response = await self.client.put(
+            "/api/admin/settings",
+            headers=admin,
+            json={
+                "streaming": {"quality": 95, "min_quality": 85, "idle_fix": False},
+                "max_instances": 5,
+                "per_user": 5,
+            },
+        )
+        self.assertEqual(response.status, 200)
+        cfg = (await response.json())["streaming"]
+        self.assertEqual(cfg["batch_max_delay"], 40)
+        response = await self.client.post(
+            "/api/instances", headers=admin, json={"game": "desktop"}
+        )
+        second = (await response.json())["id"]
+        self.assertEqual(self.docker.profiles[first]["streaming"]["quality"], 0)
+        self.assertEqual(self.docker.profiles[second]["streaming"]["quality"], 95)
+        self.assertFalse(self.docker.profiles[second]["streaming"]["idle_fix"])
+        profile = {
+            "id": "custom",
+            "name": "Custom",
+            "image": "gamedock-runtime:local",
+            "command": ["xterm"],
+            "streaming": {
+                "quality": 100,
+                "min_quality": 100,
+                "encoding": "png",
+                "encodings": "png,rgb",
+            },
+        }
+        response = await self.client.put(
+            "/api/admin/games", headers=admin, json=profile
+        )
+        self.assertEqual(response.status, 200)
+        response = await self.client.post(
+            "/api/instances", headers=admin, json={"game": "custom"}
+        )
+        third = (await response.json())["id"]
+        settings = self.docker.profiles[third]["streaming"]
+        self.assertEqual(settings["quality"], 100)
+        self.assertEqual(settings["encoding"], "png")
+        self.assertFalse(settings["idle_fix"])
+        response = await self.client.get("/api/catalog", headers=admin)
+        self.assertIn("batch_max_delay", (await response.json())["streaming_schema"])
+        profile["env"] = {"GAMEDOCK_STREAMING": "{}"}
+        with self.assertRaises(ValueError):
+            validate_profile(profile)
+
     async def test_accounts_ownership_and_revocation(self):
         alice = await self.login()
         bob = await self.login("bob")

@@ -6,7 +6,9 @@
     <title>GameDock desktop</title>
     <link rel="stylesheet" href="/assets/style.css" />
     <link rel="stylesheet" href="/assets/player.css" />
+    <link rel="stylesheet" href="/assets/notifications.css" />
     <script src="/assets/theme.js" defer></script>
+    <script src="/assets/notifications.js" defer></script>
     <script src="/assets/player.js" defer></script>
   </head>
   <body class="player">
@@ -35,7 +37,7 @@
         ><button id="stop-instance" class="danger">Stop instance</button>
       </div>
     </header>
-    <p id="player-notice" role="status" aria-live="polite"></p>
+    <div id="player-notice"></div>
     <main id="desktop-stage">
       <iframe
         id="desktop-frame"

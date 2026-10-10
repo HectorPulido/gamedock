@@ -15,6 +15,13 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from runtime.streaming import (
+    STREAMING_DEFAULTS,
+    STREAMING_FIELDS,
+    STREAMING_PRESETS,
+    validate_streaming,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 # Initial defaults; administrators can change these without rebuilding.
 DESKTOP_TOOLBAR = True
@@ -163,7 +170,15 @@ def validate_profile(data):
     ):
         raise ValueError("Invalid environment variables")
     if any(
-        k in env for k in ("DISPLAY", "XDG_RUNTIME_DIR", "GAMEDOCK_RESOLUTION", "HOME")
+        k in env
+        for k in (
+            "DISPLAY",
+            "XDG_RUNTIME_DIR",
+            "GAMEDOCK_RESOLUTION",
+            "GAMEDOCK_STREAMING",
+            "GAMEDOCK_IDLE_FIX",
+            "HOME",
+        )
     ):
         raise ValueError("Reserved environment variable")
     if (
@@ -191,6 +206,7 @@ def validate_profile(data):
     ):
         raise ValueError("Game instance limit must be between 0 and 100")
     validate_resources(data, nullable=True)
+    validate_streaming(data.get("streaming", {}))
     return {
         k: data.get(k, default)
         for k, default in [
@@ -208,6 +224,7 @@ def validate_profile(data):
             ("internet_access", False),
             ("memory_mb", None),
             ("cpus", None),
+            ("streaming", {}),
         ]
     }
 
@@ -242,7 +259,11 @@ class Docker:
         definition = {
             "Image": profile["image"],
             "Cmd": profile["command"],
-            "Env": ["GAMEDOCK_RESOLUTION=" + resolution]
+            "Env": [
+                "GAMEDOCK_RESOLUTION=" + resolution,
+                "GAMEDOCK_STREAMING="
+                + json.dumps(profile.get("streaming", STREAMING_DEFAULTS)),
+            ]
             + [k + "=" + v for k, v in profile["env"].items()],
             "Labels": {
                 "io.gamedock.managed": "true",
@@ -391,6 +412,7 @@ def config(app):
         "idle_minutes": 30,
         **RESOURCE_DEFAULTS,
         "appearance": {},
+        "streaming": dict(STREAMING_DEFAULTS),
         **json.loads(
             app["db"].execute("SELECT value FROM settings WHERE id=1").fetchone()[0]
         ),
@@ -444,6 +466,12 @@ async def catalog(request):
             "settings": cfg,
             "user": public_user(request["user"]) if request["user"] else None,
             "games": games,
+            "streaming_schema": STREAMING_FIELDS
+            if request["user"] and request["user"]["admin"]
+            else None,
+            "streaming_presets": STREAMING_PRESETS
+            if request["user"] and request["user"]["admin"]
+            else None,
             "policy": policy(request.app, request["user"]["id"])
             if request["user"]
             else None,
@@ -664,6 +692,9 @@ async def instances(request):
                 for key in RESOURCE_DEFAULTS
             },
         }
+        profile["streaming"] = validate_streaming(
+            {**cfg["streaming"], **profile.get("streaming", {})}, complete=True
+        )
         sid = secrets.token_hex(16)
         app["db"].execute(
             "INSERT INTO instances(id,uid,game,resolution,status,created,last_activity) VALUES (?,?,?,?,?,?,?)",
@@ -741,6 +772,10 @@ async def admin_settings(request):
     for key in RESOURCE_DEFAULTS:
         if key in body:
             cfg[key] = body[key]
+    if "streaming" in body:
+        cfg["streaming"] = validate_streaming(
+            {**cfg["streaming"], **validate_streaming(body["streaming"])}, complete=True
+        )
     if "appearance" in body:
         cfg["appearance"] = validate_appearance(body["appearance"])
     request.app["db"].execute(

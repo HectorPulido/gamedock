@@ -58,17 +58,6 @@ body.player {
 .player .danger:hover {
   background: color-mix(in srgb, var(--player-header), var(--danger) 20%);
 }
-#player-notice {
-  margin: 0;
-  padding: 0 20px;
-  background: var(--player-header);
-  line-height: 1.5;
-  flex-shrink: 0;
-}
-#player-notice:not(:empty) {
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
 #desktop-stage {
   position: relative;
   flex: 1;
@@ -132,4 +121,19 @@ body.player {
 #fullscreen[aria-pressed="true"] {
   background: var(--accent);
   color: var(--accent-text);
+}
+
+.desktop-stopped {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  padding: 24px;
+  color: var(--player-text);
+}
+.desktop-stopped p {
+  max-width: 400px;
+  line-height: 1.5;
 }

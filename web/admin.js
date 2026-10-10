@@ -8,8 +8,7 @@ function node(tag, text, className) {
   return el;
 }
 function message(text, error = false) {
-  $("#notice").textContent = text;
-  $("#notice").classList.toggle("error", error);
+  GameDockNotifications.show(text, { kind: error ? "error" : "success" });
 }
 async function api(path, method = "GET", body) {
   const response = await fetch("/api" + path, {
@@ -34,7 +33,14 @@ async function action(fn, button) {
   }
 }
 // Sidebar links use normal URLs so sections can be bookmarked and browser Back works.
-const sections = ["access", "games", "platform", "appearance", "instances"];
+const sections = [
+  "access",
+  "games",
+  "platform",
+  "appearance",
+  "streaming",
+  "instances",
+];
 function showSection(focus = false) {
   const id = location.hash.slice(1);
   const selected = sections.includes(id) ? id : "access";
@@ -79,6 +85,7 @@ async function load() {
   for (const key of ["registration", "desktop_toolbar", "invite_required"])
     $("#settings").elements[key].checked = state.settings[key];
   fillAppearance(state.settings.appearance || {});
+  fillStreaming(state.settings.streaming);
   if (!profileEditing) editGame();
   renderGames();
   await users();
@@ -294,6 +301,7 @@ function editGame(game) {
       cpus: null,
       banner: "",
       env: {},
+      streaming: {},
     },
     null,
     2,
@@ -643,3 +651,82 @@ setInterval(() => {
   if (state?.user?.admin && !document.hidden && location.hash === "#instances")
     action(refresh);
 }, 15000);
+
+function fillStreaming(values) {
+  const fields = $("#streaming-fields");
+  if (!fields.children.length) {
+    const groups = new Map();
+    for (const [key, spec] of Object.entries(state.streaming_schema)) {
+      if (!groups.has(spec.group)) {
+        const group = node("fieldset");
+        group.className = "streaming-group";
+        group.append(node("legend", spec.group));
+        const grid = node("div", null, "streaming-grid");
+        group.append(grid);
+        groups.set(spec.group, grid);
+        fields.append(group);
+      }
+      const label = node("label", spec.label);
+      let input;
+      if (spec.type === "select") {
+        input = node("select");
+        for (const value of spec.options) {
+          const option = node(
+            "option",
+            value === "all" ? "Automatic / all available" : value,
+          );
+          option.value = value;
+          input.append(option);
+        }
+      } else {
+        input = node("input");
+        input.type = spec.type === "boolean" ? "checkbox" : "number";
+        if (spec.type === "boolean") label.className = "check";
+        else {
+          input.min = spec.min;
+          input.max = spec.max;
+          input.step = spec.step;
+          input.required = true;
+        }
+      }
+      input.name = key;
+      if (spec.type === "boolean") label.prepend(input);
+      else label.append(input);
+      const wrapper = node("div");
+      wrapper.append(label);
+      if (spec.help) wrapper.append(node("p", spec.help, "help"));
+      groups.get(spec.group).append(wrapper);
+    }
+  }
+  for (const [key, spec] of Object.entries(state.streaming_schema)) {
+    const input = $("#streaming-settings").elements[key];
+    if (spec.type === "boolean") input.checked = values[key] ?? spec.default;
+    else input.value = values[key] ?? spec.default;
+  }
+}
+for (const button of document.querySelectorAll("[data-streaming-preset]")) {
+  button.onclick = () => {
+    fillStreaming(state.streaming_presets[button.dataset.streamingPreset]);
+    message(
+      "Preset loaded. Save streaming settings to apply it to new instances.",
+    );
+  };
+}
+$("#streaming-settings").onsubmit = (event) => {
+  event.preventDefault();
+  action(async () => {
+    const streaming = {};
+    for (const [key, spec] of Object.entries(state.streaming_schema)) {
+      const input = event.target.elements[key];
+      streaming[key] =
+        spec.type === "boolean"
+          ? input.checked
+          : spec.type === "number"
+            ? Number(input.value)
+            : input.value;
+    }
+    const result = await api("/admin/settings", "PUT", { streaming });
+    state.settings.streaming = result.streaming;
+    message("Streaming settings saved. They apply to new instances.");
+  }, event.submitter);
+};

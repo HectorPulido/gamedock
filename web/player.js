@@ -1,7 +1,33 @@
 const sid = location.pathname.split("/")[2];
 const frame = document.querySelector("#desktop-frame");
 const stage = document.querySelector("#desktop-stage");
-const notice = document.querySelector("#player-notice");
+const notify = (text, options = {}) =>
+  GameDockNotifications.show(text, options);
+let stopped = false;
+function stoppedDesktop() {
+  if (stopped) return;
+  stopped = true;
+  frame.hidden = true;
+  frame.removeAttribute("src");
+  const empty = document.createElement("section");
+  empty.className = "desktop-stopped";
+  const title = document.createElement("h1");
+  title.textContent = "Instance stopped";
+  const detail = document.createElement("p");
+  detail.textContent = "Return to the library to launch a new instance.";
+  const link = document.createElement("a");
+  link.className = "button";
+  link.href = "/";
+  link.textContent = "Back to library";
+  empty.append(title, detail, link);
+  stage.append(empty);
+  document.querySelector("#stop-instance").disabled = true;
+  GameDockNotifications.show("");
+  notify("This instance has stopped.", {
+    key: "stopped",
+    title: "Session ended",
+  });
+}
 let current,
   settings,
   lastSent = 0,
@@ -34,16 +60,18 @@ function fit() {
 }
 new ResizeObserver(fit).observe(stage);
 function input(event) {
-  if (!event.isTrusted) return;
+  if (!event.isTrusted || stopped) return;
   if (pending || Date.now() - lastSent < 5000) return;
   pending = true;
   api("/instances/" + sid + "/activity", "POST", {})
     .then(() => {
       lastSent = Date.now();
-      notice.textContent = "";
     })
     .catch((error) => {
-      notice.textContent = error.message;
+      notify(error.message, {
+        kind: "error",
+        key: "activity-" + error.message,
+      });
     })
     .finally(() => {
       pending = false;
@@ -58,6 +86,7 @@ for (const type of [
 ])
   document.addEventListener(type, input, { capture: true, passive: true });
 frame.addEventListener("load", () => {
+  if (stopped || !frame.getAttribute("src")) return;
   try {
     const doc = frame.contentDocument;
     for (const type of [
@@ -72,17 +101,22 @@ frame.addEventListener("load", () => {
       !doc.querySelector("canvas") &&
       doc.body?.textContent.includes("Starting your desktop")
     )
-      notice.textContent = "Starting your desktop…";
-    else notice.textContent = "";
+      notify("Starting your desktop…", {
+        key: "starting",
+        title: "Connecting",
+      });
   } catch {
-    notice.textContent =
-      "The desktop connection could not be opened. Return to the library and try again.";
+    notify(
+      "The desktop connection could not be opened. Return to the library and try again.",
+      { kind: "error", key: "connection" },
+    );
   }
 });
 function historyKey(uid) {
   return "gamedock-recent-" + uid;
 }
 async function refresh() {
+  if (stopped) return;
   const catalog = await api("/catalog");
   if (!catalog.user) {
     location.replace("/");
@@ -96,9 +130,7 @@ async function refresh() {
   );
   current = await api("/instances/" + sid);
   if (current.status !== "running") {
-    notice.textContent =
-      "This instance has stopped. Return to the library to launch it again.";
-    frame.removeAttribute("src");
+    stoppedDesktop();
     return;
   }
   const tabs = document.querySelector("#session-tabs");
@@ -145,26 +177,29 @@ async function refresh() {
       current.last_activity + settings.idle_minutes * 60 - Date.now() / 1000,
     );
     if (seconds <= 60)
-      notice.textContent =
-        "This instance will stop soon due to inactivity. Move the mouse or press a key to keep playing.";
+      notify(
+        "This instance will stop soon due to inactivity. Move the mouse or press a key to keep playing.",
+        { key: "idle-" + current.last_activity, title: "Still playing?" },
+      );
   }
 }
 document.querySelector("#stop-instance").onclick = async () => {
   if (!confirm("Stop this instance? Save your game before continuing.")) return;
   try {
     await api("/instances/" + sid, "DELETE", {});
+    GameDockNotifications.remember("Instance stopped.", { kind: "success" });
     location.assign("/");
   } catch (error) {
-    notice.textContent = error.message;
+    notify(error.message, { kind: "error" });
   }
 };
 refresh().catch((error) => {
-  notice.textContent = error.message;
+  notify(error.message, { kind: "error", key: "refresh-" + error.message });
 });
 setInterval(
   () =>
     refresh().catch((error) => {
-      notice.textContent = error.message;
+      notify(error.message, { kind: "error", key: "refresh-" + error.message });
     }),
   15000,
 );
@@ -188,8 +223,10 @@ fullscreenButton.onclick = async () => {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await document.body.requestFullscreen();
   } catch {
-    notice.textContent =
-      "Fullscreen could not be opened. Try again or use your browser's fullscreen mode.";
+    notify(
+      "Fullscreen could not be opened. Try again or use your browser's fullscreen mode.",
+      { kind: "error" },
+    );
   }
 };
 document.addEventListener("fullscreenchange", () => {

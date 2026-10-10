@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Generic desktop extracted from the Xvfb/Xpra session model."""
 
+import json
 import os
+from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
 import time
+
+
+from streaming import runtime_options, validate_streaming
 
 
 def resolution(value):
@@ -25,6 +30,36 @@ def main():
         raise ValueError("A game command is required")
     runtime = os.environ["XDG_RUNTIME_DIR"]
     os.makedirs(runtime, mode=0o700, exist_ok=True)
+    settings = validate_streaming(
+        json.loads(os.environ.get("GAMEDOCK_STREAMING", "{}")), complete=True
+    )
+    xpra_args, xpra_env = runtime_options(settings)
+    # Set before Xpra imports its capture, socket, and batching modules.
+    os.environ.update(xpra_env)
+    # Per-session HTML defaults keep client quality requests consistent with the server.
+    html_dir = Path(runtime) / "html"
+    html_dir.mkdir(exist_ok=True)
+    source = Path("/usr/share/xpra/www")
+    for entry in source.iterdir():
+        if entry.name.startswith("default-settings.txt"):
+            continue
+        target = html_dir / entry.name
+        if not target.exists():
+            target.symlink_to(entry)
+    defaults = (
+        (source / "default-settings.txt").read_text()
+        if (source / "default-settings.txt").exists()
+        else ""
+    )
+    defaults += (
+        "\n"
+        + "\n".join(
+            key.replace("_", "-") + " = " + str(settings[key])
+            for key in ("encoding", "quality", "min_quality", "speed", "min_speed")
+        )
+        + "\n"
+    )
+    (html_dir / "default-settings.txt").write_text(defaults)
     children = []
 
     def stop(*_):
@@ -63,11 +98,12 @@ def main():
                     ":0",
                     "--daemon=no",
                     "--bind-tcp=0.0.0.0:6084",
-                    "--html=on",
+                    "--html=" + str(html_dir),
                     "--mdns=no",
                     "--pulseaudio=no",
                     "--notifications=no",
                 ]
+                + xpra_args
             )
         )
         children.append(subprocess.Popen(command, cwd="/data"))

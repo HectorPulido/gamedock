@@ -6,8 +6,8 @@ function node(tag, text, className) {
   if (className) el.className = className;
   return el;
 }
-function message(text) {
-  $("#notice").textContent = text;
+function message(text, error = false) {
+  GameDockNotifications.show(text, { kind: error ? "error" : "success" });
 }
 async function api(path, method = "GET", body) {
   const response = await fetch("/api" + path, {
@@ -26,7 +26,7 @@ async function action(fn, button) {
   try {
     await fn();
   } catch (e) {
-    message(e.message);
+    message(e.message, true);
   } finally {
     if (button) button.disabled = false;
   }
@@ -153,6 +153,7 @@ async function refresh() {
           action(async () => {
             await api("/instances/" + i.id, "DELETE", {});
             await refresh();
+            message("Instance stopped.");
           }, stop);
       };
       controls.append(open, stop);
@@ -163,5 +164,11 @@ async function refresh() {
 }
 action(load);
 setInterval(() => {
-  if (state?.user && !document.hidden) action(refresh);
+  if (state?.user && !document.hidden)
+    refresh().catch((error) =>
+      GameDockNotifications.show(error.message, {
+        kind: "error",
+        key: "refresh-" + error.message,
+      }),
+    );
 }, 15000);

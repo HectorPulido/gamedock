@@ -174,22 +174,6 @@ body.admin-page {
 .admin-panel #profile textarea {
   min-height: 330px;
 }
-.admin-main #notice {
-  max-width: var(--content-width);
-  margin: 0 auto 24px;
-  color: var(--text);
-  background: var(--surface);
-  border-left: 3px solid var(--accent);
-  padding: 12px 16px;
-  overflow-wrap: anywhere;
-}
-.admin-main #notice:empty {
-  display: none;
-}
-.admin-main #notice.error {
-  color: var(--danger);
-  border-color: var(--danger);
-}
 .admin-main footer {
   max-width: var(--content-width);
   margin: 40px auto 0;
@@ -283,11 +267,6 @@ body.admin-page {
   margin: 0 0 12px;
   max-width: 220px;
 }
-.admin-main #notice {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-}
 @media (max-width: 1200px) {
   .managed-game {
     align-items: flex-start;
@@ -295,5 +274,31 @@ body.admin-page {
   }
   .managed-game-controls {
     flex-shrink: 1;
+  }
+}
+
+.streaming-group {
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 24px 0;
+  margin: 20px 0;
+  min-width: 0;
+}
+.streaming-group legend {
+  padding: 0 12px 0 0;
+  font-size: 20px;
+  font-weight: bold;
+}
+.streaming-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 28px;
+}
+.streaming-grid .help {
+  margin: 6px 0 0;
+}
+@media (max-width: 680px) {
+  .streaming-grid {
+    grid-template-columns: 1fr;
   }
 }
