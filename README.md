@@ -146,8 +146,15 @@ environment variables to store individual users' secrets.
 The runtime uses Xvfb, Openbox, and Xpra without audio. It supports X11 applications
 and games compatible with software rendering. GPU access, controllers, audio,
 anti-cheat, and 3D acceleration require adapting the image and device policy;
-compatibility with every game is not guaranteed. Default per-session limits are
-4 GiB of RAM, 2 CPUs, and 256 processes, configured in `server/app.py`.
+compatibility with every game is not guaranteed. Initial per-session limits are 4 GiB of RAM, 2 CPUs, and 256 processes.
+Administrators can change RAM and CPU under **Administration → Your platform →
+Session resources**. RAM is entered in MiB (1024 MiB = 1 GiB); CPU accepts fractions
+such as 0.5 or 0.75. Each game's editor also has **Game RAM** and **Game CPU**
+controls. Leave them blank to inherit the platform defaults, or set `memory_mb`
+and `cpus` in the game's JSON profile. Resource changes apply to new instances;
+running games retain their existing limits. Players cannot override these values.
+RAM accepts 128–1048576 whole MiB and CPU accepts 0.1–256; choose values your
+Docker host can support. The process limit remains 256.
 
 ### Ready-to-play example: OpenTTD
 
@@ -185,8 +192,14 @@ its `profile.json`. The Wine prefix is persisted at `/data/wine`.
 ### Player desktops and toolbar
 
 Launching a game as a player opens its desktop automatically in the same tab.
-The game is centered in the available space and scaled down to fit smaller
-windows without changing its configured resolution. The top bar shows running
+The game is centered and scaled proportionally to fill the available space,
+including enlarging it on bigger screens, without changing its configured
+resolution. **View → Original size** prevents enlargement (small windows still
+scale down to keep the whole desktop visible); the choice is remembered in the
+browser. **Fullscreen** opens the viewer and its navigation in fullscreen, and
+**Exit fullscreen** or Escape returns to the page. Browsers without fullscreen
+support hide the button. Scaling preserves aspect ratio, so screens with a
+different shape can retain margins; it does not resize windows inside the game. The top bar shows running
 instances, **Previous instance**, **Back to library**, and **Stop instance**.
 Returning to the library or changing instances disconnects the viewer and keeps
 the game running. Stopping an instance requires confirmation and preserves its
@@ -199,6 +212,33 @@ not require rebuilding images or restarting games. `DESKTOP_TOOLBAR` in
 `server/app.py` supplies the initial default when no administrator preference has
 been saved. Hiding the toolbar changes the interface, not the underlying Xpra
 features.
+
+### Platform name and appearance
+
+Under **Administration → Your platform**, change **Name** to the public name
+of your server. It appears in the header, page title, welcome heading, footer,
+and desktop viewer, including the initial HTML before JavaScript loads.
+
+**Administration → Appearance** provides three starting themes: **Classic**
+(light blue), **Midnight** (dark), and **Forest** (green). Customize page, card,
+text, accent, border, focus and viewer colors; font; corner radius; content
+width; logo; background image; and footer message. Existing banner settings
+remain under Your platform. Image fields take HTTP(S) URLs.
+
+Use **Preview** to try appearance changes in your current page, **Discard preview**
+to return to the saved settings, and **Save appearance** to publish the appearance
+for all visitors. **Reset to preset** clears overrides, assets and custom CSS in
+the preview; save to keep the reset. Choosing another theme replaces the palette
+while preserving the other controls. **Advanced customization** supports custom
+CSS for all three surfaces and JSON import/export for reusable appearances.
+Imported files populate the controls and require saving before affecting visitors.
+
+Appearance is stored in SQLite and survives portal recreation. Other visitors
+receive it on their next page load; open desktop viewers refresh it within
+15 seconds. Custom CSS is an administrator capability: it can change or hide any
+interface element. To recover from a bad stylesheet, update the authenticated
+API with `PUT /api/admin/settings` and `{"appearance": {}}`. API appearance writes
+replace the appearance object; omitted values fall back to the selected preset.
 
 ### Invitations and player limits
 
@@ -321,3 +361,9 @@ against a Docker instance with a one-minute timeout. Build the browser environme
 with `tests/Dockerfile.browser`; screenshots are written to `/artifacts`. The QA
 portal uses `PUBLIC_URL=http://gamedock-qa-portal-1:8080`, passed to the browser as
 `QA_URL`; the QA CLI connects through loopback:18088.
+
+`tests/customization_browser.py` verifies public branding, all three themes,
+preview isolation, logo and CSS, appearance import/export, inherited and per-game
+resource limits in actual Docker containers, mouse/keyboard through an enlarged
+viewer, fixed Xvfb resolution, fullscreen entry/exit, and mobile layout. It uses
+the same disposable QA deployment and browser environment as the other suites.

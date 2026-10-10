@@ -22,11 +22,14 @@ function fit() {
   const [width, height] = current.resolution.split("x").map(Number);
   frame.style.width = width + "px";
   frame.style.height = height + "px";
-  const scale = Math.min(
-    1,
+  const available = Math.min(
     stage.clientWidth / width,
     stage.clientHeight / height,
   );
+  const scale =
+    document.querySelector("#viewer-scale").value === "original"
+      ? Math.min(1, available)
+      : available;
   frame.style.transform = `translate(-50%, -50%) scale(${scale})`;
 }
 new ResizeObserver(fit).observe(stage);
@@ -86,6 +89,7 @@ async function refresh() {
     return;
   }
   settings = catalog.settings;
+  GameDockTheme.apply(settings);
   document.querySelector("#brand").textContent = settings.name;
   const list = (await api("/instances")).filter(
     (i) => i.uid === catalog.user.id && i.status === "running",
@@ -164,3 +168,33 @@ setInterval(
     }),
   15000,
 );
+
+const scaleControl = document.querySelector("#viewer-scale");
+try {
+  scaleControl.value = localStorage.getItem("gamedock-viewer-scale") || "fit";
+} catch {}
+if (!["fit", "original"].includes(scaleControl.value))
+  scaleControl.value = "fit";
+scaleControl.addEventListener("change", () => {
+  try {
+    localStorage.setItem("gamedock-viewer-scale", scaleControl.value);
+  } catch {}
+  fit();
+});
+const fullscreenButton = document.querySelector("#fullscreen");
+fullscreenButton.hidden = !document.fullscreenEnabled;
+fullscreenButton.onclick = async () => {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.body.requestFullscreen();
+  } catch {
+    notice.textContent =
+      "Fullscreen could not be opened. Try again or use your browser's fullscreen mode.";
+  }
+};
+document.addEventListener("fullscreenchange", () => {
+  const active = !!document.fullscreenElement;
+  fullscreenButton.textContent = active ? "Exit fullscreen" : "Fullscreen";
+  fullscreenButton.setAttribute("aria-pressed", String(active));
+  requestAnimationFrame(fit);
+});

@@ -1,21 +1,43 @@
 :root {
-  font-family: "Trebuchet MS", Verdana, sans-serif;
-  color: #163354;
-  background: #eaf1fa;
+  --font: "Trebuchet MS", Verdana, sans-serif;
+  --background: #eaf1fa;
+  --surface: #ffffff;
+  --text: #163354;
+  --muted: #45648b;
+  --accent: #235bc4;
+  --accent-text: #ffffff;
+  --border: #9eb4d3;
+  --art: #d1dff5;
+  --danger: #a03542;
+  --danger-background: #ffe4e8;
+  --focus: #b87400;
+  --player-background: #101a29;
+  --player-header: #163354;
+  --player-text: #eaf1fa;
+  --radius: 7px;
+  --content-width: 1180px;
+  --background-image: none;
+  --blue: var(--accent);
+  --line: var(--border);
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--background);
   font-synthesis: none;
-  --blue: #235bc4;
-  --line: #bccce2;
 }
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
+  background-image: var(--background-image);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
 }
 header,
 main,
 footer {
-  max-width: 1180px;
+  max-width: var(--content-width);
   margin: auto;
 }
 header {
@@ -51,7 +73,7 @@ main {
 }
 .caption {
   font-size: 16px;
-  color: #45648b;
+  color: var(--muted);
 }
 h1 {
   font-size: clamp(36px, 5vw, 62px);
@@ -74,30 +96,30 @@ h3 {
   font-size: 20px;
 }
 .desktop-art {
-  background: #d1dff5;
+  background: var(--art);
   border-radius: 70px 70px 14px 14px;
   padding: 35px;
   text-align: center;
   transform: rotate(3deg);
 }
 .window {
-  border: 3px solid #163354;
-  border-radius: 12px;
-  background: #fff;
+  border: 3px solid var(--text);
+  border-radius: calc(var(--radius) * 1.5);
+  background: var(--surface);
   text-align: left;
-  box-shadow: 12px 12px 0 #adc3e4;
+  box-shadow: 12px 12px 0 var(--border);
   padding: 10px;
 }
 .window i {
   display: inline-block;
-  background: #7394c7;
+  background: var(--muted);
   width: 7px;
   height: 7px;
   border-radius: 50%;
   margin-right: 5px;
 }
 .window div {
-  border-top: 2px solid #163354;
+  border-top: 2px solid var(--text);
   text-align: center;
   padding: 20px;
   font-size: 45px;
@@ -113,9 +135,9 @@ button,
   font: inherit;
   font-weight: bold;
   background: var(--blue);
-  color: white;
+  color: var(--accent-text);
   border: 1px solid var(--blue);
-  border-radius: 7px;
+  border-radius: var(--radius);
   padding: 11px 17px;
   cursor: pointer;
   display: inline-block;
@@ -124,7 +146,7 @@ button,
 }
 button:hover,
 .button:hover {
-  background: #17469b;
+  background: color-mix(in srgb, var(--accent), var(--text) 20%);
 }
 button:disabled {
   opacity: 0.55;
@@ -132,28 +154,28 @@ button:disabled {
 }
 .secondary {
   background: transparent;
-  color: #163354;
-  border-color: #9eb4d3;
+  color: var(--text);
+  border-color: var(--border);
 }
 .secondary:hover {
-  background: #d9e5f7;
+  background: var(--art);
 }
 .danger {
   background: transparent;
-  color: #a03542;
-  border-color: #bd8890;
+  color: var(--danger);
+  border-color: var(--danger);
 }
 .danger:hover {
-  background: #ffe4e8;
+  background: var(--danger-background);
 }
 input,
 textarea,
 select {
   font: inherit;
-  border: 1px solid #9eb4d3;
-  border-radius: 5px;
-  background: white;
-  color: #163354;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
   padding: 11px;
   width: 100%;
   margin-top: 7px;
@@ -173,7 +195,7 @@ select:focus-visible,
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #e5a22c;
+  outline: 3px solid var(--focus);
   outline-offset: 3px;
 }
 .actions {
@@ -200,7 +222,7 @@ summary:focus-visible {
 #notice {
   min-height: 26px;
   line-height: 1.5;
-  color: #a03542;
+  color: var(--danger);
 }
 .section-title {
   display: flex;
@@ -215,19 +237,19 @@ summary:focus-visible {
   margin: 20px 0 40px;
 }
 .game {
-  background: #fff;
-  border-radius: 15px;
+  background: var(--surface);
+  border-radius: calc(var(--radius) * 2);
   overflow: hidden;
   border: 1px solid var(--line);
 }
 .game-cover {
   height: 135px;
-  background: #c4d6f2;
+  background: var(--art);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 60px;
-  color: #235bc4;
+  color: var(--accent);
 }
 .game-cover img {
   width: 100%;
@@ -244,7 +266,7 @@ summary:focus-visible {
   font-size: 14px;
   line-height: 1.5;
   min-height: 44px;
-  color: #45648b;
+  color: var(--muted);
 }
 .instance,
 .user-row {
@@ -258,7 +280,7 @@ summary:focus-visible {
 .instance small {
   display: block;
   margin-top: 6px;
-  color: #45648b;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
 .instance.stopped {
@@ -266,7 +288,7 @@ summary:focus-visible {
 }
 details {
   margin-top: 50px;
-  border-top: 2px solid #9eb4d3;
+  border-top: 2px solid var(--border);
   padding-top: 25px;
 }
 summary {
@@ -301,7 +323,7 @@ footer {
 }
 footer span {
   font-weight: normal;
-  color: #45648b;
+  color: var(--muted);
 }
 [hidden] {
   display: none !important;
@@ -350,7 +372,7 @@ footer span {
   width: 100%;
   max-height: 300px;
   object-fit: cover;
-  border-radius: 15px;
+  border-radius: calc(var(--radius) * 2);
 }
 @media (max-width: 700px) {
   .intro-banner {
@@ -361,7 +383,7 @@ footer span {
 .help {
   font-size: 13px;
   line-height: 1.5;
-  color: #45648b;
+  color: var(--muted);
 }
 .advanced {
   margin: 18px 0;
@@ -390,7 +412,7 @@ footer span {
 #invitation-result code {
   user-select: all;
   overflow-wrap: anywhere;
-  background: white;
+  background: var(--surface);
   padding: 8px;
 }
 .account-policy {
@@ -402,4 +424,59 @@ footer span {
 }
 .account .user-row {
   border: 0;
+}
+
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+.brand {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+form {
+  min-width: 0;
+}
+.appearance-form {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.appearance-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+.appearance-colors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0 20px;
+}
+.appearance-colors label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+input[type="color"] {
+  width: 50px;
+  height: 36px;
+  padding: 3px;
+  margin: 0;
+  cursor: pointer;
+}
+#custom-css {
+  font: 13px/1.5 monospace;
+}
+.theme-actions {
+  margin: 16px 0;
+}
+#appearance-status {
+  min-height: 1.5em;
+}
+@media (max-width: 700px) {
+  .appearance-grid {
+    grid-template-columns: 1fr;
+  }
 }

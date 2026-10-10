@@ -1,6 +1,8 @@
 import asyncio
 import hashlib
 import hmac
+import html
+import math
 import json
 import os
 import re
@@ -16,6 +18,97 @@ from aiohttp import web
 ROOT = Path(__file__).resolve().parent.parent
 # Initial defaults; administrators can change these without rebuilding.
 DESKTOP_TOOLBAR = True
+
+
+# Defaults also support databases and game profiles created before these settings.
+RESOURCE_DEFAULTS = {"memory_mb": 4096, "cpus": 2}
+THEME_COLORS = (
+    "background",
+    "surface",
+    "text",
+    "muted",
+    "accent",
+    "accent_text",
+    "border",
+    "art",
+    "danger",
+    "danger_background",
+    "focus",
+    "player_background",
+    "player_header",
+    "player_text",
+)
+
+
+def validate_resources(data, nullable=False):
+    for field, minimum, maximum in (("memory_mb", 128, 1048576), ("cpus", 0.1, 256)):
+        if field not in data or (nullable and data[field] is None):
+            continue
+        value = data[field]
+        if (
+            type(value) not in (int, float)
+            or not minimum <= value <= maximum
+            or not math.isfinite(value)
+            or (field == "memory_mb" and type(value) is not int)
+        ):
+            raise ValueError(
+                f"{field} must be between {minimum} and {maximum}"
+                + (" (whole MiB)" if field == "memory_mb" else "")
+            )
+
+
+def validate_appearance(value):
+    if not isinstance(value, dict):
+        raise ValueError("Invalid appearance")
+    allowed = {
+        "theme",
+        "colors",
+        "font",
+        "radius",
+        "content_width",
+        "logo_url",
+        "background_image",
+        "footer",
+        "custom_css",
+    }
+    if set(value) - allowed:
+        raise ValueError("Unknown appearance setting")
+    if value.get("theme", "classic") not in ("classic", "midnight", "forest"):
+        raise ValueError("Unknown theme")
+    colors = value.get("colors", {})
+    if (
+        not isinstance(colors, dict)
+        or set(colors) - set(THEME_COLORS)
+        or any(
+            not isinstance(c, str) or not re.fullmatch(r"#[0-9a-fA-F]{6}", c)
+            for c in colors.values()
+        )
+    ):
+        raise ValueError("Colors must use #RRGGBB")
+    if value.get("font", "trebuchet") not in ("trebuchet", "system", "verdana", "mono"):
+        raise ValueError("Unknown font")
+    for field, default, minimum, maximum in (
+        ("radius", 7, 0, 32),
+        ("content_width", 1180, 800, 1920),
+    ):
+        number = value.get(field, default)
+        if type(number) is not int or not minimum <= number <= maximum:
+            raise ValueError("Invalid " + field)
+    for field in ("logo_url", "background_image"):
+        url = value.get(field, "")
+        if (
+            not isinstance(url, str)
+            or len(url) > 1000
+            or (url and not re.match(r"^https?://", url))
+        ):
+            raise ValueError(field + ": use an HTTP(S) URL")
+    for field, length in (("footer", 500), ("custom_css", 20000)):
+        if (
+            not isinstance(value.get(field, ""), str)
+            or len(value.get(field, "")) > length
+        ):
+            raise ValueError("Invalid " + field)
+    return value
 
 
 def password_hash(password, salt=None):
@@ -97,6 +190,7 @@ def validate_profile(data):
         or not 0 <= data.get("max_per_user", 1) <= 100
     ):
         raise ValueError("Game instance limit must be between 0 and 100")
+    validate_resources(data, nullable=True)
     return {
         k: data.get(k, default)
         for k, default in [
@@ -112,6 +206,8 @@ def validate_profile(data):
             ("max_per_user", 1),
             ("enabled", True),
             ("internet_access", False),
+            ("memory_mb", None),
+            ("cpus", None),
         ]
     }
 
@@ -156,8 +252,8 @@ class Docker:
             "HostConfig": {
                 "Init": True,
                 "NetworkMode": session_network,
-                "Memory": 4 * 1024**3,
-                "NanoCpus": 2_000_000_000,
+                "Memory": profile["memory_mb"] * 1024**2,
+                "NanoCpus": round(profile["cpus"] * 1_000_000_000),
                 "PidsLimit": 256,
                 "CapDrop": ["ALL"],
                 "SecurityOpt": ["no-new-privileges:true"],
@@ -293,6 +389,8 @@ def config(app):
         "desktop_toolbar": DESKTOP_TOOLBAR,
         "invite_required": True,
         "idle_minutes": 30,
+        **RESOURCE_DEFAULTS,
+        "appearance": {},
         **json.loads(
             app["db"].execute("SELECT value FROM settings WHERE id=1").fetchone()[0]
         ),
@@ -559,6 +657,13 @@ async def instances(request):
             raise web.HTTPForbidden(text="Only administrators can choose a resolution")
         if resolution not in profile["resolutions"]:
             raise ValueError("Resolution not allowed")
+        profile = {
+            **profile,
+            **{
+                key: profile.get(key) if profile.get(key) is not None else cfg[key]
+                for key in RESOURCE_DEFAULTS
+            },
+        }
         sid = secrets.token_hex(16)
         app["db"].execute(
             "INSERT INTO instances(id,uid,game,resolution,status,created,last_activity) VALUES (?,?,?,?,?,?,?)",
@@ -632,6 +737,12 @@ async def admin_settings(request):
             if type(body[field]) is not int or not 1 <= body[field] <= 100:
                 raise ValueError("Invalid limit")
             cfg[field] = body[field]
+    validate_resources(body)
+    for key in RESOURCE_DEFAULTS:
+        if key in body:
+            cfg[key] = body[key]
+    if "appearance" in body:
+        cfg["appearance"] = validate_appearance(body["appearance"])
     request.app["db"].execute(
         "UPDATE settings SET value=? WHERE id=1", (json.dumps(cfg),)
     )
@@ -867,7 +978,7 @@ async def player(request):
     instance = owned(request)
     if instance["status"] != "running":
         return web.Response(status=302, headers={"Location": "/"})
-    return web.FileResponse(ROOT / "web/player.html")
+    return await platform_page(request, "player.html")
 
 
 async def instance_details(request):
@@ -978,6 +1089,14 @@ async def lifecycle(app):
     app["db"].close()
 
 
+async def platform_page(request, filename="index.html"):
+    name = html.escape(config(request.app)["name"])
+    document = (ROOT / "web" / filename).read_text().replace("GameDock", name)
+    return web.Response(
+        text=document, content_type="text/html", headers={"Cache-Control": "no-store"}
+    )
+
+
 def create_app(db_path=None, docker=None):
     import logging
 
@@ -1070,7 +1189,7 @@ def create_app(db_path=None, docker=None):
     app.router.add_get("/api/admin/users", admin_users)
     app.router.add_patch("/api/admin/users/{uid}", admin_users)
     app.router.add_get("/desktop/{sid}/{tail:.*}", proxy)
-    app.router.add_get("/", lambda _: web.FileResponse(ROOT / "web/index.html"))
+    app.router.add_get("/", platform_page)
     app.router.add_static("/assets/", ROOT / "web")
     return app
 

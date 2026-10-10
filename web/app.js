@@ -50,6 +50,7 @@ $("#refresh").onclick = (e) => action(refresh, e.target);
 async function load() {
   state = await api("/catalog");
   document.title = state.settings.name;
+  GameDockTheme.apply(state.settings);
   $("#brand").textContent = state.settings.name;
   $("#headline").textContent = state.settings.name;
   $("#banner").textContent = state.settings.banner;
@@ -84,10 +85,13 @@ async function load() {
       "max_instances",
       "per_user",
       "idle_minutes",
+      "memory_mb",
+      "cpus",
     ])
       $("#settings").elements[key].value = state.settings[key] ?? "";
     for (const key of ["registration", "desktop_toolbar", "invite_required"])
       $("#settings").elements[key].checked = state.settings[key];
+    fillAppearance(state.settings.appearance || {});
     if (!profileEditing) editGame();
     await invitations();
     await users();
@@ -223,6 +227,8 @@ $("#settings").onsubmit = (e) => {
       idle_minutes: Number(f.elements.idle_minutes.value),
       max_instances: Number(f.elements.max_instances.value),
       per_user: Number(f.elements.per_user.value),
+      memory_mb: Number(f.elements.memory_mb.value),
+      cpus: Number(f.elements.cpus.value),
     });
     await load();
     message("Settings saved.");
@@ -235,6 +241,8 @@ function editGame(game) {
   $("#profile-mode-help").textContent = game
     ? "Editing an existing game. Save to update its definition. Use New game to start a separate profile."
     : "Create a game with a new ID. Saving an existing ID updates that game.";
+  f.memory_mb.value = game?.memory_mb ?? "";
+  f.cpus.value = game?.cpus ?? "";
   f.definition.value = JSON.stringify(
     game || {
       id: "my-game",
@@ -247,6 +255,8 @@ function editGame(game) {
       max_per_user: 1,
       enabled: true,
       internet_access: false,
+      memory_mb: null,
+      cpus: null,
       banner: "",
       env: {},
     },
@@ -265,14 +275,33 @@ $("#new-game").onclick = newGame;
 $("#profile").oninput = () => {
   profileEditing = true;
 };
+// Keep the convenient controls and JSON editor in sync. Invalid JSON stays
+// untouched until the administrator fixes it and submits the form.
+$("#profile").elements.definition.addEventListener("input", (e) => {
+  try {
+    const game = JSON.parse(e.target.value);
+    $("#profile").elements.memory_mb.value = game.memory_mb ?? "";
+    $("#profile").elements.cpus.value = game.cpus ?? "";
+  } catch {}
+});
+for (const key of ["memory_mb", "cpus"])
+  $("#profile").elements[key].addEventListener("input", (e) => {
+    try {
+      const f = $("#profile").elements;
+      const game = JSON.parse(f.definition.value);
+      game[key] = e.target.value === "" ? null : Number(e.target.value);
+      f.definition.value = JSON.stringify(game, null, 2);
+    } catch {}
+  });
 $("#profile").onsubmit = (e) => {
   e.preventDefault();
   action(async () => {
-    await api(
-      "/admin/games",
-      "PUT",
-      JSON.parse(e.target.elements.definition.value),
-    );
+    const game = JSON.parse(e.target.elements.definition.value);
+    for (const key of ["memory_mb", "cpus"]) {
+      const value = e.target.elements[key].value;
+      game[key] = value === "" ? null : Number(value);
+    }
+    await api("/admin/games", "PUT", game);
     profileEditing = false;
     await load();
     message("Game saved.");
@@ -433,3 +462,135 @@ action(load);
 setInterval(() => {
   if (state?.user && !document.hidden) action(refresh);
 }, 15000);
+
+// Appearance is saved separately so changing limits cannot overwrite a theme.
+const appearanceForm = $("#appearance");
+const colorLabels = {
+  background: "Page background",
+  surface: "Cards and inputs",
+  text: "Text",
+  muted: "Secondary text",
+  accent: "Accent",
+  accent_text: "Accent text",
+  border: "Borders",
+  art: "Covers and artwork",
+  danger: "Danger text",
+  danger_background: "Danger background",
+  focus: "Keyboard focus",
+  player_background: "Viewer background",
+  player_header: "Viewer header",
+  player_text: "Viewer text",
+};
+for (const [key, label] of Object.entries(colorLabels)) {
+  const el = node("label", label);
+  const input = node("input");
+  input.type = "color";
+  input.name = "color_" + key;
+  el.append(input);
+  $("#theme-colors").append(el);
+}
+function fillAppearance(a) {
+  const f = appearanceForm.elements;
+  f.theme.value = a.theme || "classic";
+  f.font.value = a.font || "trebuchet";
+  f.radius.value = a.radius ?? 7;
+  f.content_width.value = a.content_width ?? 1180;
+  f.logo_url.value = a.logo_url || "";
+  f.background_image.value = a.background_image || "";
+  f.footer.value = a.footer ?? "Game desktops under your control.";
+  f.custom_css.value = a.custom_css || "";
+  const colors = {
+    ...GameDockTheme.presets[f.theme.value].colors,
+    ...a.colors,
+  };
+  for (const key of Object.keys(colorLabels))
+    f["color_" + key].value = colors[key];
+}
+function readAppearance() {
+  const f = appearanceForm.elements;
+  return {
+    theme: f.theme.value,
+    font: f.font.value,
+    radius: Number(f.radius.value),
+    content_width: Number(f.content_width.value),
+    logo_url: f.logo_url.value,
+    background_image: f.background_image.value,
+    footer: f.footer.value,
+    custom_css: f.custom_css.value,
+    colors: Object.fromEntries(
+      Object.keys(colorLabels).map((key) => [key, f["color_" + key].value]),
+    ),
+  };
+}
+appearanceForm.elements.theme.onchange = () => {
+  const f = appearanceForm.elements;
+  for (const [key, value] of Object.entries(
+    GameDockTheme.presets[f.theme.value].colors,
+  ))
+    f["color_" + key].value = value;
+  $("#appearance-status").textContent =
+    "Preset colors loaded. Preview or save to apply.";
+};
+$("#preview-theme").onclick = () => {
+  if (!appearanceForm.reportValidity()) return;
+  GameDockTheme.apply({ ...state.settings, appearance: readAppearance() });
+  $("#appearance-status").textContent =
+    "Preview only. Save appearance to apply for everyone.";
+};
+$("#cancel-theme").onclick = () => {
+  fillAppearance(state.settings.appearance || {});
+  GameDockTheme.apply(state.settings);
+  $("#appearance-status").textContent = "Preview discarded.";
+};
+$("#reset-theme").onclick = () => {
+  fillAppearance({ theme: appearanceForm.elements.theme.value });
+  // Drop custom CSS from the preview too, so this also recovers a broken layout.
+  GameDockTheme.apply({ ...state.settings, appearance: readAppearance() });
+  $("#appearance-status").textContent =
+    "Preset restored in preview. Save to keep it.";
+};
+appearanceForm.onsubmit = (e) => {
+  e.preventDefault();
+  $("#appearance-status").textContent = "Saving appearance…";
+  action(async () => {
+    const appearance = readAppearance();
+    const saved = await api("/admin/settings", "PUT", { appearance });
+    state.settings = saved;
+    GameDockTheme.apply(saved);
+    $("#appearance-status").textContent = "Appearance saved.";
+  }, e.submitter);
+};
+$("#export-theme").onclick = () => {
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(readAppearance(), null, 2)], {
+      type: "application/json",
+    }),
+  );
+  const link = node("a");
+  link.href = url;
+  link.download = "appearance.json";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+$("#import-theme").onchange = async (e) => {
+  try {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 30000) throw Error("Appearance file is too large.");
+    const a = JSON.parse(await file.text());
+    if (
+      !a ||
+      Array.isArray(a) ||
+      typeof a !== "object" ||
+      (a.theme && !GameDockTheme.presets[a.theme])
+    )
+      throw Error("Invalid appearance file.");
+    fillAppearance(a);
+    $("#appearance-status").textContent =
+      "Appearance imported. Preview or save to apply.";
+  } catch (error) {
+    $("#appearance-status").textContent = error.message;
+  } finally {
+    e.target.value = "";
+  }
+};

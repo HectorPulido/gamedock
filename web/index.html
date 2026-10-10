@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>GameDock</title>
     <link rel="stylesheet" href="/assets/style.css" />
+    <script src="/assets/theme.js" defer></script>
     <script src="/assets/app.js" defer></script>
   </head>
   <body>
     <header>
       <a href="/" class="brand"
-        ><span class="mark" aria-hidden="true">▦</span
-        ><span id="brand">GameDock</span></a
+        ><img class="brand-logo" alt="" hidden /><span
+          class="mark"
+          aria-hidden="true"
+          >▦</span
+        ><span id="brand" data-platform-name>GameDock</span></a
       >
       <div id="identity"></div>
     </header>
@@ -19,7 +23,7 @@
       <section class="intro">
         <div>
           <p class="caption">Game library</p>
-          <h1 id="headline">Your next desktop.</h1>
+          <h1 id="headline">GameDock</h1>
           <p id="banner">Your library. Your desktop. Ready to play.</p>
         </div>
         <img id="intro-banner" class="intro-banner" alt="" hidden />
@@ -133,8 +137,32 @@
                   type="number"
                   min="1"
                   max="100"
-                  required /></label
-              ><button>Save settings</button>
+                  required
+              /></label>
+              <h3>Session resources</h3>
+              <label
+                >Default RAM per instance (MiB)<input
+                  name="memory_mb"
+                  type="number"
+                  min="128"
+                  max="1048576"
+                  step="1"
+                  required
+              /></label>
+              <label
+                >Default CPU per instance<input
+                  name="cpus"
+                  type="number"
+                  min="0.1"
+                  max="256"
+                  step="0.01"
+                  required
+              /></label>
+              <p class="help">
+                1024 MiB = 1 GiB. CPU accepts fractions (0.5 = half a core).
+                Applies to new instances; each game can override these defaults.
+              </p>
+              <button>Save settings</button>
             </form>
             <form id="profile">
               <h3 id="profile-title">Add game</h3>
@@ -150,6 +178,30 @@
                   required
                 ></textarea>
               </label>
+              <div class="appearance-grid">
+                <label
+                  >Game RAM (MiB)<input
+                    name="memory_mb"
+                    type="number"
+                    min="128"
+                    max="1048576"
+                    step="1"
+                    placeholder="Use platform default"
+                /></label>
+                <label
+                  >Game CPU<input
+                    name="cpus"
+                    type="number"
+                    min="0.1"
+                    max="256"
+                    step="0.01"
+                    placeholder="Use platform default"
+                /></label>
+              </div>
+              <p class="help">
+                Leave blank to inherit platform resources. Changes apply to new
+                instances.
+              </p>
               <div class="actions">
                 <button>Save game</button
                 ><button type="button" id="new-game" class="secondary">
@@ -159,6 +211,99 @@
               <p id="profile-help" role="status"></p>
             </form>
           </div>
+          <form id="appearance" class="appearance-form">
+            <h3>Appearance</h3>
+            <p>
+              Choose a starting theme, then make it yours. Preview changes here
+              before saving for everyone.
+            </p>
+            <div class="appearance-grid">
+              <label
+                >Theme<select name="theme" aria-label="Theme">
+                  <option value="classic">Classic · light blue</option>
+                  <option value="midnight">Midnight · dark</option>
+                  <option value="forest">Forest · green</option>
+                </select></label
+              >
+              <label
+                >Font<select name="font" aria-label="Font">
+                  <option value="trebuchet">Trebuchet</option>
+                  <option value="system">System</option>
+                  <option value="verdana">Verdana</option>
+                  <option value="mono">Monospace</option>
+                </select></label
+              >
+              <label
+                >Corner radius (px)<input
+                  name="radius"
+                  type="number"
+                  min="0"
+                  max="32"
+                  required
+              /></label>
+              <label
+                >Content width (px)<input
+                  name="content_width"
+                  type="number"
+                  min="800"
+                  max="1920"
+                  required
+              /></label>
+              <label
+                >Logo image URL<input
+                  name="logo_url"
+                  type="url"
+                  maxlength="1000"
+              /></label>
+              <label
+                >Page background image URL<input
+                  name="background_image"
+                  type="url"
+                  maxlength="1000"
+              /></label>
+            </div>
+            <label>Footer message<input name="footer" maxlength="500" /></label>
+            <div id="theme-colors" class="appearance-colors"></div>
+            <details class="advanced">
+              <summary>Advanced customization</summary>
+              <label
+                >Custom CSS<textarea
+                  id="custom-css"
+                  name="custom_css"
+                  rows="8"
+                  maxlength="20000"
+                  spellcheck="false"
+                  placeholder=".intro { padding-top: 30px; }"
+                ></textarea>
+              </label>
+              <p class="help">
+                Styles apply to the library, sign-in and viewer pages. Use CSS
+                for layout and details beyond the controls above. Save only
+                styles you trust.
+              </p>
+              <div class="actions theme-actions">
+                <button type="button" id="export-theme" class="secondary">
+                  Export appearance</button
+                ><label
+                  >Import appearance JSON<input
+                    id="import-theme"
+                    type="file"
+                    accept="application/json,.json"
+                /></label>
+              </div>
+            </details>
+            <div class="actions theme-actions">
+              <button>Save appearance</button
+              ><button type="button" id="preview-theme" class="secondary">
+                Preview</button
+              ><button type="button" id="cancel-theme" class="secondary">
+                Discard preview</button
+              ><button type="button" id="reset-theme" class="secondary">
+                Reset to preset
+              </button>
+            </div>
+            <p id="appearance-status" role="status" aria-live="polite"></p>
+          </form>
           <section class="invitations">
             <h3>Invitations</h3>
             <form id="invitation-form">
@@ -193,6 +338,9 @@
         </details>
       </section>
     </main>
-    <footer>GameDock <span>Game desktops under your control.</span></footer>
+    <footer>
+      <strong data-platform-name>GameDock</strong
+      ><span id="footer-message">Game desktops under your control.</span>
+    </footer>
   </body>
 </html>

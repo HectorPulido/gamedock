@@ -6,13 +6,29 @@
     <title>GameDock desktop</title>
     <link rel="stylesheet" href="/assets/style.css" />
     <link rel="stylesheet" href="/assets/player.css" />
+    <script src="/assets/theme.js" defer></script>
     <script src="/assets/player.js" defer></script>
   </head>
   <body class="player">
     <header class="player-header">
-      <a class="brand" id="brand" href="/">GameDock</a>
+      <a class="brand" href="/"
+        ><img class="brand-logo" alt="" hidden /><span
+          id="brand"
+          data-platform-name
+          >GameDock</span
+        ></a
+      >
       <nav id="session-tabs" aria-label="Running instances"></nav>
       <div class="player-actions">
+        <label class="viewer-scale"
+          >View<select id="viewer-scale" aria-label="View">
+            <option value="fit">Fit to space</option>
+            <option value="original">Original size</option>
+          </select></label
+        >
+        <button id="fullscreen" class="secondary" aria-pressed="false">
+          Fullscreen
+        </button>
         <button id="previous" class="secondary" disabled>
           Previous instance</button
         ><a class="button secondary" href="/">Back to library</a

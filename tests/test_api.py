@@ -4,17 +4,19 @@ import sqlite3
 import tempfile
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, AsyncMock
 from aiohttp.test_utils import TestClient, TestServer
-from server.app import create_app, validate_profile, expire_idle
+from server.app import create_app, validate_profile, expire_idle, Docker
 
 
 class FakeDocker:
     def __init__(self):
         self.active = {}
+        self.profiles = {}
 
     async def start(self, sid, uid, profile, resolution):
         self.active[sid] = {"State": {"Running": True}}
+        self.profiles[sid] = dict(profile)
 
     async def inspect(self, sid):
         return self.active.get(sid)
@@ -366,6 +368,146 @@ class API(unittest.IsolatedAsyncioTestCase):
         ):
             with self.assertRaises(ValueError):
                 validate_profile(bad)
+
+    async def test_resource_defaults_overrides_and_permissions(self):
+        alice = await self.login()
+        admin = await self.login("admin", "login")
+        response = await self.client.put(
+            "/api/admin/settings", headers=alice, json={"memory_mb": 512, "cpus": 0.5}
+        )
+        self.assertEqual(response.status, 403)
+        response = await self.client.post(
+            "/api/instances", headers=alice, json={"game": "desktop", "cpus": 200}
+        )
+        first = (await response.json())["id"]
+        self.assertEqual(self.docker.profiles[first]["memory_mb"], 4096)
+        self.assertEqual(self.docker.profiles[first]["cpus"], 2)
+        await self.client.delete("/api/instances/" + first, headers=alice, json={})
+        response = await self.client.put(
+            "/api/admin/settings", headers=admin, json={"memory_mb": 768, "cpus": 0.5}
+        )
+        self.assertEqual(response.status, 200)
+        response = await self.client.post(
+            "/api/instances", headers=alice, json={"game": "desktop"}
+        )
+        second = (await response.json())["id"]
+        self.assertEqual(self.docker.profiles[second]["memory_mb"], 768)
+        self.assertEqual(self.docker.profiles[second]["cpus"], 0.5)
+        games = (await (await self.client.get("/api/catalog", headers=admin)).json())[
+            "games"
+        ]
+        profile = games[0]
+        profile.update(memory_mb=1024, cpus=1.25)
+        response = await self.client.put(
+            "/api/admin/games", headers=admin, json=profile
+        )
+        self.assertEqual(response.status, 200)
+        await self.client.delete("/api/instances/" + second, headers=alice, json={})
+        response = await self.client.post(
+            "/api/instances", headers=alice, json={"game": "desktop"}
+        )
+        third = (await response.json())["id"]
+        self.assertEqual(self.docker.profiles[third]["memory_mb"], 1024)
+        self.assertEqual(self.docker.profiles[third]["cpus"], 1.25)
+        # Existing sessions keep their original limits.
+        self.assertEqual(self.docker.profiles[first]["memory_mb"], 4096)
+        for values in (
+            {"cpus": 0},
+            {"cpus": True},
+            {"cpus": None},
+            {"cpus": 257},
+            {"memory_mb": 127},
+            {"memory_mb": 512.5},
+            {"memory_mb": "1024"},
+            {"memory_mb": 1048577},
+        ):
+            response = await self.client.put(
+                "/api/admin/settings", headers=admin, json=values
+            )
+            self.assertEqual(response.status, 400, values)
+            if list(values.values()) != [None]:
+                with self.assertRaises(ValueError):
+                    validate_profile({**profile, **values})
+        profile.update(memory_mb=None, cpus=None)
+        self.assertIsNone(validate_profile(profile)["memory_mb"])
+
+    async def test_docker_resource_payload(self):
+        docker = Docker()
+        docker.request = AsyncMock(return_value={})
+        await docker.start(
+            "test",
+            2,
+            {
+                "id": "desktop",
+                "image": "runtime:local",
+                "command": ["xterm"],
+                "env": {},
+                "memory_mb": 1536,
+                "cpus": 0.75,
+            },
+            "1280x720",
+        )
+        call = next(
+            c
+            for c in docker.request.call_args_list
+            if "/containers/create" in c.args[1]
+        )
+        host = call.args[2]["HostConfig"]
+        self.assertEqual(host["Memory"], 1536 * 1024**2)
+        self.assertEqual(host["NanoCpus"], 750000000)
+        self.assertEqual(host["CapDrop"], ["ALL"])
+        self.assertNotIn("PortBindings", host)
+
+    async def test_brand_appearance_validation_and_public_pages(self):
+        admin = await self.login("admin", "login")
+        appearance = {
+            "theme": "forest",
+            "font": "system",
+            "radius": 12,
+            "content_width": 1300,
+            "colors": {"accent": "#285634"},
+            "logo_url": "https://example.com/logo.png",
+            "footer": "Welcome",
+            "custom_css": ".intro { padding-top: 20px; }",
+        }
+        response = await self.client.put(
+            "/api/admin/settings",
+            headers=admin,
+            json={"name": "miservidor <test>", "appearance": appearance},
+        )
+        self.assertEqual(response.status, 200)
+        response = await self.client.get("/")
+        page = await response.text()
+        self.assertIn("<title>miservidor &lt;test&gt;</title>", page)
+        self.assertNotIn("GameDock", page)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        catalog = await (await self.client.get("/api/catalog")).json()
+        self.assertEqual(catalog["settings"]["appearance"], appearance)
+        response = await self.client.post(
+            "/api/instances", headers=admin, json={"game": "desktop"}
+        )
+        sid = (await response.json())["id"]
+        page = await (await self.client.get("/play/" + sid, headers=admin)).text()
+        self.assertIn("miservidor &lt;test&gt;", page)
+        self.assertNotIn("GameDock", page)
+        for invalid in (
+            [],
+            {"theme": "unknown"},
+            {"font": "script"},
+            {"radius": -1},
+            {"content_width": 100},
+            {"colors": {"accent": "red; display:none"}},
+            {"colors": {"unknown": "#ffffff"}},
+            {"logo_url": "javascript:alert(1)"},
+            {"custom_css": "x" * 20001},
+            {"unknown": True},
+        ):
+            response = await self.client.put(
+                "/api/admin/settings", headers=admin, json={"appearance": invalid}
+            )
+            self.assertEqual(response.status, 400, invalid)
+        catalog = await (await self.client.get("/api/catalog")).json()
+        self.assertEqual(catalog["settings"]["appearance"], appearance)
 
     async def test_reconcile_process_exit(self):
         alice = await self.login()

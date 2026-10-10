@@ -21,4 +21,5 @@ python3 tests/idle_live.py
 mkdir -p /tmp/gamedock-artifacts
 docker run --rm --network gamedock-qa_default -e QA_URL=http://gamedock-qa-portal-1:8080 -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/gamedock-qa.env:/qa.env:ro -v "$PWD:/app:ro" -v /tmp/gamedock-artifacts:/artifacts gamedock-browser-qa:local python tests/browser.py
 docker run --rm --network gamedock-qa_default -e QA_URL=http://gamedock-qa-portal-1:8080 -v /tmp/gamedock-qa.env:/qa.env:ro -v "$PWD:/app:ro" -v /tmp/gamedock-artifacts:/artifacts gamedock-browser-qa:local python tests/game_browser.py
+docker run --rm --network gamedock-qa_default -e QA_URL=http://gamedock-qa-portal-1:8080 -v /var/run/docker.sock:/var/run/docker.sock -v /tmp/gamedock-qa.env:/qa.env:ro -v "$PWD:/app:ro" -v /tmp/gamedock-artifacts:/artifacts gamedock-browser-qa:local python tests/customization_browser.py
 echo 'QA passed. Screenshots: /tmp/gamedock-artifacts'

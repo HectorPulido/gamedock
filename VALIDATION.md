@@ -74,3 +74,29 @@ native Linux Docker host for sibling isolation, as documented in the README.
 The JSON editor was restored with explicit Add game and Edit game modes.
 Chromium verifies creation from a new template, loading an existing definition,
 and resetting the editor with New game, alongside the OpenTTD player flow.
+
+## Resource controls, platform appearance and fullscreen
+
+The October 10, 2026 changes were checked in the independent
+`gamedock-personalize` Docker project on macOS ARM64 with OrbStack:
+
+- All 15 API tests pass in Docker, including resource inheritance and game
+  overrides, administrator permissions, invalid resource and appearance values,
+  Docker payload conversion, and escaped branding in initial HTML.
+- The real Docker/CLI suite passes, including portal recreation without
+  restarting the game process, persistence, resolutions and network isolation.
+- Chromium verifies all three saved themes on the public sign-in page, the
+  server name in titles and footer, preview isolation, logo loading, custom CSS,
+  and appearance JSON import/export.
+- Existing Chromium suites also pass registration, instance navigation, logout
+  revocation, administration, invitations and a real OpenTTD session.
+- Actual session inspection confirms inherited 1024 MiB / 0.5 CPU and per-game
+  1536 MiB / 0.75 CPU limits.
+- The viewer grows beyond its native 1280-pixel width while both the iframe
+  viewport and `xdpyinfo` remain 1280×720. Real mouse/keyboard input reaches xterm
+  through the enlarged viewer. Fullscreen entry/exit and mobile fitting pass.
+
+Reproduce the feature checks with `tests/customization_browser.py`; the standard
+`./scripts/qa.sh` now includes it. Screenshots from this run are under
+`/tmp/gamedock-personalize-artifacts`. Credentials and application data remain
+outside Git. Resource changes affect new sessions and do not restart games.
