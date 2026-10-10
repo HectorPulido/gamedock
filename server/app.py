@@ -798,6 +798,30 @@ async def admin_settings(request):
 
 async def admin_games(request):
     user(request, True)
+    if request.method == "PATCH":
+        body = await request.json()
+        if (
+            not isinstance(body, dict)
+            or set(body) != {"enabled"}
+            or type(body["enabled"]) is not bool
+        ):
+            raise web.HTTPBadRequest(text="Expected an enabled boolean")
+        row = (
+            request.app["db"]
+            .execute(
+                "SELECT definition FROM games WHERE id=?", (request.match_info["game"],)
+            )
+            .fetchone()
+        )
+        if not row:
+            raise web.HTTPNotFound(text="Game not found")
+        profile = json.loads(row["definition"])
+        profile["enabled"] = body["enabled"]
+        request.app["db"].execute(
+            "UPDATE games SET definition=? WHERE id=?",
+            (json.dumps(profile), request.match_info["game"]),
+        )
+        return web.json_response(profile)
     if request.method == "DELETE":
         request.app["db"].execute(
             "DELETE FROM games WHERE id=?", (request.match_info["game"],)
@@ -1286,6 +1310,7 @@ def create_app(db_path=None, docker=None):
     app.router.add_delete("/api/admin/invitations/{iid}", invitations)
     app.router.add_put("/api/admin/settings", admin_settings)
     app.router.add_put("/api/admin/games", admin_games)
+    app.router.add_patch("/api/admin/games/{game}", admin_games)
     app.router.add_delete("/api/admin/games/{game}", admin_games)
     app.router.add_get("/api/admin/users", admin_users)
     app.router.add_patch("/api/admin/users/{uid}", admin_users)

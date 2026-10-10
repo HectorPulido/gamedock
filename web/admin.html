@@ -139,6 +139,19 @@
                 Create a game with a new ID. Use Edit on a game card to modify
                 an existing game.
               </p>
+              <label class="game-availability"
+                ><input
+                  type="checkbox"
+                  name="enabled"
+                  role="switch"
+                  checked
+                />Enabled in player library</label
+              >
+              <p class="help">
+                Disabling hides this game from players and prevents new
+                launches. Running instances keep working; administrators can
+                still launch tests.
+              </p>
               <label
                 >JSON definition<textarea
                   name="definition"

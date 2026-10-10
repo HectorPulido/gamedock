@@ -181,7 +181,37 @@ function renderGames() {
       }, launch);
     const actions = node("div", null, "actions");
     actions.append(edit, launch, remove);
-    controls.append(resolution, actions);
+    const availability = node("label", null, "game-availability");
+    const toggle = node("input");
+    toggle.type = "checkbox";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute("aria-label", "Enable " + game.name);
+    toggle.checked = game.enabled !== false;
+    toggle.onchange = () =>
+      action(async () => {
+        try {
+          const updated = await api("/admin/games/" + game.id, "PATCH", {
+            enabled: toggle.checked,
+          });
+          game.enabled = updated.enabled;
+          try {
+            const f = $("#profile").elements;
+            const draft = JSON.parse(f.definition.value);
+            if (draft.id === game.id) {
+              draft.enabled = updated.enabled;
+              f.enabled.checked = updated.enabled;
+              f.definition.value = JSON.stringify(draft, null, 2);
+            }
+          } catch {}
+          renderGames();
+          message(game.name + (game.enabled ? " enabled." : " disabled."));
+        } catch (error) {
+          toggle.checked = game.enabled !== false;
+          throw error;
+        }
+      }, toggle);
+    availability.append(toggle, node("span", "Enabled"));
+    controls.append(availability, resolution, actions);
     card.append(text, controls);
     $("#games").append(card);
   }
@@ -283,6 +313,7 @@ function editGame(game) {
   $("#profile-mode-help").textContent = game
     ? "Editing an existing game. Save to update its definition. Use New game to start a separate profile."
     : "Create a game with a new ID. Saving an existing ID updates that game.";
+  f.enabled.checked = game?.enabled !== false;
   f.memory_mb.value = game?.memory_mb ?? "";
   f.cpus.value = game?.cpus ?? "";
   fillGpu(game?.gpu || {});
@@ -325,9 +356,18 @@ $("#profile").oninput = () => {
 $("#profile").elements.definition.addEventListener("input", (e) => {
   try {
     const game = JSON.parse(e.target.value);
+    $("#profile").elements.enabled.checked = game.enabled !== false;
     $("#profile").elements.memory_mb.value = game.memory_mb ?? "";
     $("#profile").elements.cpus.value = game.cpus ?? "";
     fillGpu(game.gpu || {});
+  } catch {}
+});
+$("#profile").elements.enabled.addEventListener("change", (event) => {
+  try {
+    const f = $("#profile").elements;
+    const game = JSON.parse(f.definition.value);
+    game.enabled = event.target.checked;
+    f.definition.value = JSON.stringify(game, null, 2);
   } catch {}
 });
 for (const key of ["memory_mb", "cpus"])
@@ -402,6 +442,7 @@ $("#profile").onsubmit = (e) => {
       game[key] = value === "" ? null : Number(value);
     }
     game.gpu = gpuFromForm(game.gpu);
+    game.enabled = e.target.elements.enabled.checked;
     await api("/admin/games", "PUT", game);
     profileEditing = false;
     await load();
