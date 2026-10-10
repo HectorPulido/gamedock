@@ -34,7 +34,8 @@ with sync_playwright() as p:
     page.get_by_label("Username", exact=True).fill("admin")
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
-    page.get_by_text("Administration", exact=True).click()
+    page.get_by_role("link", name="Administration", exact=True).click()
+    page.locator("#admin-nav").get_by_role("link", name="Platform", exact=True).click()
     original = page.request.get(URL + "/api/catalog").json()["settings"]
     sid = None
     profile_id = "qa-customization"
@@ -46,7 +47,10 @@ with sync_playwright() as p:
         settings.get_by_role("button", name="Save settings", exact=True).click()
         expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()
         expect(page.locator("footer [data-platform-name]")).to_have_text("miservidor")
-        expect(page).to_have_title("miservidor")
+        expect(page).to_have_title("miservidor | Administration")
+        page.locator("#admin-nav").get_by_role(
+            "link", name="Appearance", exact=True
+        ).click()
         # All presets persist and appear on the public sign-in page too.
         appearance = page.locator("#appearance")
         public = browser.new_page()
@@ -116,6 +120,7 @@ with sync_playwright() as p:
             "document.querySelector('.brand-logo').naturalWidth > 0"
         )
         # Create a real desktop via the editor; blank resource fields inherit.
+        page.locator("#admin-nav").get_by_role("link", name="Games", exact=True).click()
         page.get_by_role("button", name="Add game", exact=True).click()
         form = page.locator("#profile")
         profile = {

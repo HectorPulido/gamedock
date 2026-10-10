@@ -8,12 +8,14 @@ from browser_helpers import URL, ARTIFACTS, PASSWORD, rendered, centered
 
 with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
-    page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    context = browser.new_context(viewport={"width": 1440, "height": 1000})
+    page = context.new_page()
     page.goto(URL)
     page.get_by_label("Username", exact=True).fill("admin")
     page.get_by_label("Password", exact=True).fill(PASSWORD)
     page.get_by_role("button", name="Sign in", exact=True).click()
-    page.get_by_text("Administration", exact=True).click()
+    page.get_by_role("link", name="Administration", exact=True).click()
+    page.locator("#admin-nav").get_by_role("link", name="Platform", exact=True).click()
     settings = page.locator("#settings")
     settings.get_by_label("Name", exact=True).fill("GameDock Playroom")
     settings.get_by_label("Banner / welcome message").fill(
@@ -26,10 +28,15 @@ with sync_playwright() as p:
     settings.get_by_label("Require an invitation code").check()
     page.get_by_role("button", name="Save settings", exact=True).click()
     expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()
+    expect(page.locator("#brand")).to_have_text("GameDock Playroom")
+    preview = page.context.new_page()
+    preview.goto(URL)
     expect(
-        page.get_by_role("heading", name="GameDock Playroom", exact=True)
+        preview.get_by_role("heading", name="GameDock Playroom", exact=True)
     ).to_be_visible()
-    page.wait_for_function("document.querySelector('#intro-banner').naturalWidth>0")
+    preview.wait_for_function("document.querySelector('#intro-banner').naturalWidth>0")
+    preview.close()
+    page.locator("#admin-nav").get_by_role("link", name="Games", exact=True).click()
     # Add game starts a new JSON template; Edit loads the existing definition.
     page.get_by_role("button", name="Add game", exact=True).click()
     profile = json.loads(Path("examples/openttd/profile.json").read_text())
@@ -58,6 +65,7 @@ with sync_playwright() as p:
         json.loads(form.get_by_label("JSON definition").input_value())["id"]
         == "my-game"
     )
+    page.locator("#admin-nav").get_by_role("link", name="Access", exact=True).click()
     invitation = page.locator("#invitation-form")
     invitation.get_by_label("Label", exact=True).fill("Browser QA")
     invitation.get_by_role("button", name="Create invitation").click()
@@ -83,6 +91,7 @@ with sync_playwright() as p:
     assert remote.locator("#float_menu").is_hidden()
     player.screenshot(path=str(ARTIFACTS / "openttd.png"), full_page=True)
     # Changing the admin toolbar checkbox affects existing viewers without rebuilding.
+    page.locator("#admin-nav").get_by_role("link", name="Platform", exact=True).click()
     settings.get_by_label("Show desktop toolbar").check()
     page.get_by_role("button", name="Save settings", exact=True).click()
     expect(page.get_by_text("Settings saved.", exact=True)).to_be_visible()
@@ -91,7 +100,7 @@ with sync_playwright() as p:
     )
     # Account-level game type and total instance controls are editable in the UI.
     page.reload()
-    page.get_by_text("Administration", exact=True).click()
+    page.locator("#admin-nav").get_by_role("link", name="Access", exact=True).click()
     account = page.locator(".account").filter(
         has=page.get_by_text(username, exact=True)
     )

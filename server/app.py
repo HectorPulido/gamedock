@@ -1089,6 +1089,13 @@ async def lifecycle(app):
     app["db"].close()
 
 
+async def admin_page(request):
+    if not request["user"]:
+        return web.Response(status=302, headers={"Location": "/"})
+    user(request, True)
+    return await platform_page(request, "admin.html")
+
+
 async def platform_page(request, filename="index.html"):
     name = html.escape(config(request.app)["name"])
     document = (ROOT / "web" / filename).read_text().replace("GameDock", name)
@@ -1190,6 +1197,8 @@ def create_app(db_path=None, docker=None):
     app.router.add_patch("/api/admin/users/{uid}", admin_users)
     app.router.add_get("/desktop/{sid}/{tail:.*}", proxy)
     app.router.add_get("/", platform_page)
+    app.router.add_get("/admin", admin_page)
+    app.router.add_get("/admin/", admin_page)
     app.router.add_static("/assets/", ROOT / "web")
     return app
 

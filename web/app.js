@@ -1,6 +1,5 @@
 const $ = (s) => document.querySelector(s);
 let state;
-let profileEditing = false;
 function node(tag, text, className) {
   const el = document.createElement(tag);
   if (text) el.textContent = text;
@@ -60,11 +59,9 @@ async function load() {
     $("#intro-banner").src = state.settings.banner_image;
   $("#auth").hidden = !!state.user;
   $("#library").hidden = !state.user;
-  $("#admin").hidden = !state.user?.admin;
   $("#register").hidden = !state.settings.registration;
   $("#invite-field").hidden =
     !state.settings.registration || !state.settings.invite_required;
-  $("#add-game").hidden = !state.user?.admin;
   $("#identity").replaceChildren();
   if (!state.user) return;
   $("#identity").append(node("span", state.user.username + " "));
@@ -74,32 +71,22 @@ async function load() {
       await api("/logout", "POST", {});
       await load();
     }, out);
+  if (state.user.admin) {
+    const admin = node("a", "Administration", "button secondary");
+    admin.href = "/admin";
+    $("#identity").append(admin);
+  }
   $("#identity").append(out);
   renderGames();
   await refresh();
-  if (state.user.admin) {
-    for (const key of [
-      "name",
-      "banner",
-      "banner_image",
-      "max_instances",
-      "per_user",
-      "idle_minutes",
-      "memory_mb",
-      "cpus",
-    ])
-      $("#settings").elements[key].value = state.settings[key] ?? "";
-    for (const key of ["registration", "desktop_toolbar", "invite_required"])
-      $("#settings").elements[key].checked = state.settings[key];
-    fillAppearance(state.settings.appearance || {});
-    if (!profileEditing) editGame();
-    await invitations();
-    await users();
-  }
 }
+
 function renderGames() {
   $("#games").replaceChildren();
-  for (const game of state.games) {
+  const games = state.games.filter(
+    (g) => g.enabled !== false && g.max_per_user !== 0,
+  );
+  for (const game of games) {
     const card = node("article", null, "game");
     const cover = node("div", null, "game-cover");
     if (game.banner && /^https?:\/\//.test(game.banner)) {
@@ -110,56 +97,17 @@ function renderGames() {
     } else cover.textContent = "▦";
     const body = node("div", null, "game-body");
     body.append(node("h3", game.name), node("p", game.description));
-    const label = node("label", "Resolution");
-    const select = node("select");
-    for (const size of game.resolutions) {
-      const o = node("option", size);
-      o.value = size;
-      select.append(o);
-    }
-    label.append(select);
-    label.hidden = !state.user.admin;
     const launch = node("button", "Launch instance");
     launch.onclick = () =>
       action(async () => {
-        const instance = await api("/instances", "POST", {
-          game: game.id,
-          ...(state.user.admin ? { resolution: select.value } : {}),
-        });
-        message(
-          "Instance created. The desktop may take a few seconds to become ready.",
-        );
-        if (!state.user.admin) {
-          location.assign(instance.url);
-          return;
-        }
-        await refresh();
+        const instance = await api("/instances", "POST", { game: game.id });
+        location.assign(instance.url);
       }, launch);
-    body.append(label, launch);
-    if (state.user.admin) {
-      const edit = node("button", "Edit", "secondary");
-      edit.onclick = () => {
-        $("#admin details").open = true;
-        editGame(game);
-        $("#profile").scrollIntoView({ behavior: "smooth" });
-      };
-      const remove = node("button", "Remove from catalog", "danger");
-      remove.onclick = () => {
-        if (confirm("Remove " + game.name + " from the catalog?"))
-          action(async () => {
-            await api("/admin/games/" + game.id, "DELETE", {});
-            await load();
-          }, remove);
-      };
-      const controls = node("div", null, "actions");
-      controls.style.marginTop = "12px";
-      controls.append(edit, remove);
-      body.append(controls);
-    }
+    body.append(launch);
     card.append(cover, body);
     $("#games").append(card);
   }
-  if (!state.games.length)
+  if (!games.length)
     $("#games").append(
       node(
         "p",
@@ -168,8 +116,9 @@ function renderGames() {
     );
 }
 async function refresh() {
-  const list = (await api("/instances")).filter((i) =>
-    ["running", "starting"].includes(i.status),
+  const list = (await api("/instances")).filter(
+    (i) =>
+      ["running", "starting"].includes(i.status) && i.uid === state.user.id,
   );
   $("#instances").replaceChildren();
   if (!list.length)
@@ -191,8 +140,7 @@ async function refresh() {
             starting: "Starting",
             stopped: "Stopped",
             failed: "Startup failed",
-          }[i.status] || i.status) +
-          (state.user.admin ? " · Account " + i.uid : ""),
+          }[i.status] || i.status),
       ),
     );
     const controls = node("div", null, "actions");
@@ -213,384 +161,7 @@ async function refresh() {
     $("#instances").append(row);
   }
 }
-$("#settings").onsubmit = (e) => {
-  e.preventDefault();
-  const f = e.target;
-  action(async () => {
-    await api("/admin/settings", "PUT", {
-      name: f.elements.name.value,
-      banner: f.elements.banner.value,
-      banner_image: f.elements.banner_image.value,
-      registration: f.elements.registration.checked,
-      desktop_toolbar: f.elements.desktop_toolbar.checked,
-      invite_required: f.elements.invite_required.checked,
-      idle_minutes: Number(f.elements.idle_minutes.value),
-      max_instances: Number(f.elements.max_instances.value),
-      per_user: Number(f.elements.per_user.value),
-      memory_mb: Number(f.elements.memory_mb.value),
-      cpus: Number(f.elements.cpus.value),
-    });
-    await load();
-    message("Settings saved.");
-  }, e.submitter);
-};
-function editGame(game) {
-  profileEditing = !!game;
-  const f = $("#profile").elements;
-  $("#profile-title").textContent = game ? "Edit game" : "Add game";
-  $("#profile-mode-help").textContent = game
-    ? "Editing an existing game. Save to update its definition. Use New game to start a separate profile."
-    : "Create a game with a new ID. Saving an existing ID updates that game.";
-  f.memory_mb.value = game?.memory_mb ?? "";
-  f.cpus.value = game?.cpus ?? "";
-  f.definition.value = JSON.stringify(
-    game || {
-      id: "my-game",
-      name: "My game",
-      description: "Describe the game",
-      image: "my-game:local",
-      command: ["/opt/game/start"],
-      resolutions: ["1280x720", "1920x1080"],
-      default_resolution: "1280x720",
-      max_per_user: 1,
-      enabled: true,
-      internet_access: false,
-      memory_mb: null,
-      cpus: null,
-      banner: "",
-      env: {},
-    },
-    null,
-    2,
-  );
-}
-function newGame() {
-  editGame();
-  $("#admin details").open = true;
-  $("#profile").scrollIntoView({ behavior: "smooth" });
-  $("#profile").elements.definition.focus();
-}
-$("#add-game").onclick = newGame;
-$("#new-game").onclick = newGame;
-$("#profile").oninput = () => {
-  profileEditing = true;
-};
-// Keep the convenient controls and JSON editor in sync. Invalid JSON stays
-// untouched until the administrator fixes it and submits the form.
-$("#profile").elements.definition.addEventListener("input", (e) => {
-  try {
-    const game = JSON.parse(e.target.value);
-    $("#profile").elements.memory_mb.value = game.memory_mb ?? "";
-    $("#profile").elements.cpus.value = game.cpus ?? "";
-  } catch {}
-});
-for (const key of ["memory_mb", "cpus"])
-  $("#profile").elements[key].addEventListener("input", (e) => {
-    try {
-      const f = $("#profile").elements;
-      const game = JSON.parse(f.definition.value);
-      game[key] = e.target.value === "" ? null : Number(e.target.value);
-      f.definition.value = JSON.stringify(game, null, 2);
-    } catch {}
-  });
-$("#profile").onsubmit = (e) => {
-  e.preventDefault();
-  action(async () => {
-    const game = JSON.parse(e.target.elements.definition.value);
-    for (const key of ["memory_mb", "cpus"]) {
-      const value = e.target.elements[key].value;
-      game[key] = value === "" ? null : Number(value);
-    }
-    await api("/admin/games", "PUT", game);
-    profileEditing = false;
-    await load();
-    message("Game saved.");
-  }, e.submitter);
-};
-async function invitations() {
-  const list = await api("/admin/invitations");
-  $("#invitations").replaceChildren();
-  for (const invite of list) {
-    const row = node("div", null, "user-row");
-    row.append(
-      node(
-        "span",
-        (invite.label || "Invitation") +
-          " — " +
-          invite.uses +
-          "/" +
-          invite.max_uses +
-          " uses" +
-          (invite.revoked
-            ? " (revoked)"
-            : invite.expires < Date.now() / 1000
-              ? " (expired)"
-              : " — expires " +
-                new Date(invite.expires * 1000).toLocaleDateString()),
-      ),
-    );
-    if (!invite.revoked) {
-      const revoke = node("button", "Revoke", "secondary");
-      revoke.onclick = () =>
-        action(async () => {
-          await api("/admin/invitations/" + invite.id, "DELETE", {});
-          await invitations();
-        }, revoke);
-      row.append(revoke);
-    }
-    $("#invitations").append(row);
-  }
-}
-$("#invitation-form").onsubmit = (e) => {
-  e.preventDefault();
-  action(async () => {
-    const f = e.target.elements;
-    const result = await api("/admin/invitations", "POST", {
-      label: f.label.value,
-      max_uses: Number(f.max_uses.value),
-      expires_days: Number(f.expires_days.value),
-    });
-    $("#invitation-result").replaceChildren(
-      node("span", "Copy this code now; it is shown only once: "),
-      node("code", result.code),
-    );
-    await invitations();
-  }, e.submitter);
-};
-async function users() {
-  const list = await api("/admin/users");
-  $("#users").replaceChildren();
-  for (const u of list) {
-    const row = node("div", null, "user-row");
-    row.append(
-      node(
-        "span",
-        u.username +
-          (u.admin ? " · Administrator" : "") +
-          (u.enabled ? "" : " · Disabled"),
-      ),
-    );
-    if (u.id !== state.user.id) {
-      const toggle = node(
-        "button",
-        u.enabled ? "Disable account" : "Enable account",
-        "secondary",
-      );
-      toggle.onclick = () => {
-        if (
-          !u.enabled ||
-          confirm("Disable this account and stop its instances?")
-        )
-          action(async () => {
-            await api("/admin/users/" + u.id, "PATCH", { enabled: !u.enabled });
-            await users();
-            await refresh();
-          }, toggle);
-      };
-      row.append(toggle);
-    }
-    const container = node("div", null, "account");
-    container.append(row);
-    if (!u.admin) {
-      const details = node("details", null, "advanced");
-      details.append(node("summary", "Game access and instance limits"));
-      const form = node("form", null, "account-policy");
-      const maximum = node(
-        "label",
-        "Total instances (blank uses the platform limit)",
-      );
-      const maxInput = node("input");
-      maxInput.type = "number";
-      maxInput.min = 0;
-      maxInput.max = 100;
-      maxInput.value = u.policy.max_instances ?? "";
-      maximum.append(maxInput);
-      form.append(maximum);
-      const inherit = node("label", null, "check"),
-        inheritInput = node("input");
-      inheritInput.type = "checkbox";
-      inheritInput.checked = u.policy.games === null;
-      inherit.append(
-        inheritInput,
-        document.createTextNode("Use the library's default game access"),
-      );
-      form.append(inherit);
-      const fields = [];
-      for (const game of state.games) {
-        const label = node("label", game.name + " instances (0 blocks access)");
-        const input = node("input");
-        input.type = "number";
-        input.min = 0;
-        input.max = 100;
-        input.value = u.policy.games?.[game.id] ?? game.max_per_user ?? 1;
-        input.disabled = inheritInput.checked;
-        label.append(input);
-        form.append(label);
-        fields.push([game.id, input]);
-      }
-      inheritInput.onchange = () =>
-        fields.forEach(([, input]) => {
-          input.disabled = inheritInput.checked;
-        });
-      const save = node("button", "Save account limits");
-      form.append(save);
-      form.onsubmit = (e) => {
-        e.preventDefault();
-        action(async () => {
-          await api("/admin/users/" + u.id, "PATCH", {
-            policy: {
-              max_instances:
-                maxInput.value === "" ? null : Number(maxInput.value),
-              games: inheritInput.checked
-                ? null
-                : Object.fromEntries(
-                    fields.map(([id, input]) => [id, Number(input.value)]),
-                  ),
-            },
-          });
-          message("Account limits saved.");
-          await users();
-        }, save);
-      };
-      details.append(form);
-      container.append(details);
-    }
-    $("#users").append(container);
-  }
-}
 action(load);
 setInterval(() => {
   if (state?.user && !document.hidden) action(refresh);
 }, 15000);
-
-// Appearance is saved separately so changing limits cannot overwrite a theme.
-const appearanceForm = $("#appearance");
-const colorLabels = {
-  background: "Page background",
-  surface: "Cards and inputs",
-  text: "Text",
-  muted: "Secondary text",
-  accent: "Accent",
-  accent_text: "Accent text",
-  border: "Borders",
-  art: "Covers and artwork",
-  danger: "Danger text",
-  danger_background: "Danger background",
-  focus: "Keyboard focus",
-  player_background: "Viewer background",
-  player_header: "Viewer header",
-  player_text: "Viewer text",
-};
-for (const [key, label] of Object.entries(colorLabels)) {
-  const el = node("label", label);
-  const input = node("input");
-  input.type = "color";
-  input.name = "color_" + key;
-  el.append(input);
-  $("#theme-colors").append(el);
-}
-function fillAppearance(a) {
-  const f = appearanceForm.elements;
-  f.theme.value = a.theme || "classic";
-  f.font.value = a.font || "trebuchet";
-  f.radius.value = a.radius ?? 7;
-  f.content_width.value = a.content_width ?? 1180;
-  f.logo_url.value = a.logo_url || "";
-  f.background_image.value = a.background_image || "";
-  f.footer.value = a.footer ?? "Game desktops under your control.";
-  f.custom_css.value = a.custom_css || "";
-  const colors = {
-    ...GameDockTheme.presets[f.theme.value].colors,
-    ...a.colors,
-  };
-  for (const key of Object.keys(colorLabels))
-    f["color_" + key].value = colors[key];
-}
-function readAppearance() {
-  const f = appearanceForm.elements;
-  return {
-    theme: f.theme.value,
-    font: f.font.value,
-    radius: Number(f.radius.value),
-    content_width: Number(f.content_width.value),
-    logo_url: f.logo_url.value,
-    background_image: f.background_image.value,
-    footer: f.footer.value,
-    custom_css: f.custom_css.value,
-    colors: Object.fromEntries(
-      Object.keys(colorLabels).map((key) => [key, f["color_" + key].value]),
-    ),
-  };
-}
-appearanceForm.elements.theme.onchange = () => {
-  const f = appearanceForm.elements;
-  for (const [key, value] of Object.entries(
-    GameDockTheme.presets[f.theme.value].colors,
-  ))
-    f["color_" + key].value = value;
-  $("#appearance-status").textContent =
-    "Preset colors loaded. Preview or save to apply.";
-};
-$("#preview-theme").onclick = () => {
-  if (!appearanceForm.reportValidity()) return;
-  GameDockTheme.apply({ ...state.settings, appearance: readAppearance() });
-  $("#appearance-status").textContent =
-    "Preview only. Save appearance to apply for everyone.";
-};
-$("#cancel-theme").onclick = () => {
-  fillAppearance(state.settings.appearance || {});
-  GameDockTheme.apply(state.settings);
-  $("#appearance-status").textContent = "Preview discarded.";
-};
-$("#reset-theme").onclick = () => {
-  fillAppearance({ theme: appearanceForm.elements.theme.value });
-  // Drop custom CSS from the preview too, so this also recovers a broken layout.
-  GameDockTheme.apply({ ...state.settings, appearance: readAppearance() });
-  $("#appearance-status").textContent =
-    "Preset restored in preview. Save to keep it.";
-};
-appearanceForm.onsubmit = (e) => {
-  e.preventDefault();
-  $("#appearance-status").textContent = "Saving appearance…";
-  action(async () => {
-    const appearance = readAppearance();
-    const saved = await api("/admin/settings", "PUT", { appearance });
-    state.settings = saved;
-    GameDockTheme.apply(saved);
-    $("#appearance-status").textContent = "Appearance saved.";
-  }, e.submitter);
-};
-$("#export-theme").onclick = () => {
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(readAppearance(), null, 2)], {
-      type: "application/json",
-    }),
-  );
-  const link = node("a");
-  link.href = url;
-  link.download = "appearance.json";
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-};
-$("#import-theme").onchange = async (e) => {
-  try {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 30000) throw Error("Appearance file is too large.");
-    const a = JSON.parse(await file.text());
-    if (
-      !a ||
-      Array.isArray(a) ||
-      typeof a !== "object" ||
-      (a.theme && !GameDockTheme.presets[a.theme])
-    )
-      throw Error("Invalid appearance file.");
-    fillAppearance(a);
-    $("#appearance-status").textContent =
-      "Appearance imported. Preview or save to apply.";
-  } catch (error) {
-    $("#appearance-status").textContent = error.message;
-  } finally {
-    e.target.value = "";
-  }
-};

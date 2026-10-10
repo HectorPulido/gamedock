@@ -104,7 +104,7 @@ server and `--credentials` to maintain separate sessions.
 
 Derive an image from `gamedock-runtime:local`, install the program, and keep the
 `player` user (UID 1000). The working directory is `/data`, persisted per account
-and game. As an administrator, click **Add game** above the library to open a
+and game. As an administrator, choose **Administration → Games → Add game** to open a
 new JSON template. Give it a unique `id`, set its name, installed Docker image,
 launch command, resolutions, and limits, then click **Save game**. Click **Edit**
 on an existing game card to load its JSON definition. **New game** resets the
@@ -147,7 +147,7 @@ The runtime uses Xvfb, Openbox, and Xpra without audio. It supports X11 applicat
 and games compatible with software rendering. GPU access, controllers, audio,
 anti-cheat, and 3D acceleration require adapting the image and device policy;
 compatibility with every game is not guaranteed. Initial per-session limits are 4 GiB of RAM, 2 CPUs, and 256 processes.
-Administrators can change RAM and CPU under **Administration → Your platform →
+Administrators can change RAM and CPU under **Administration → Platform →
 Session resources**. RAM is entered in MiB (1024 MiB = 1 GiB); CPU accepts fractions
 such as 0.5 or 0.75. Each game's editor also has **Game RAM** and **Game CPU**
 controls. Leave them blank to inherit the platform defaults, or set `memory_mb`
@@ -206,7 +206,7 @@ the game running. Stopping an instance requires confirmation and preserves its
 saved files. Stopped instances are hidden from the library; history remains in
 the API and database.
 
-Use **Administration → Your platform → Show desktop toolbar** to show or hide
+Use **Administration → Platform → Show desktop toolbar** to show or hide
 Xpra's floating controls. Changes apply to open viewers within 15 seconds and do
 not require rebuilding images or restarting games. `DESKTOP_TOOLBAR` in
 `server/app.py` supplies the initial default when no administrator preference has
@@ -215,7 +215,7 @@ features.
 
 ### Platform name and appearance
 
-Under **Administration → Your platform**, change **Name** to the public name
+Under **Administration → Platform**, change **Name** to the public name
 of your server. It appears in the header, page title, welcome heading, footer,
 and desktop viewer, including the initial HTML before JavaScript loads.
 
@@ -223,7 +223,7 @@ and desktop viewer, including the initial HTML before JavaScript loads.
 (light blue), **Midnight** (dark), and **Forest** (green). Customize page, card,
 text, accent, border, focus and viewer colors; font; corner radius; content
 width; logo; background image; and footer message. Existing banner settings
-remain under Your platform. Image fields take HTTP(S) URLs.
+remain under Platform. Image fields take HTTP(S) URLs.
 
 Use **Preview** to try appearance changes in your current page, **Discard preview**
 to return to the saved settings, and **Save appearance** to publish the appearance
@@ -243,7 +243,7 @@ replace the appearance object; omitted values fall back to the selected preset.
 ### Invitations and player limits
 
 Registration requires an invitation by default. Under **Administration →
-Invitations**, create a code with a label, usage limit, and expiration. Copy it
+Access**, create a code with a label, usage limit, and expiration. Copy it
 when it is shown: only its hash is stored, and it cannot be displayed again.
 Share it with the player, who enters it in the registration form or uses the CLI
 `register --invite CODE` option. Used-up, revoked, and expired codes are rejected.
@@ -367,3 +367,9 @@ preview isolation, logo and CSS, appearance import/export, inherited and per-gam
 resource limits in actual Docker containers, mouse/keyboard through an enlarged
 viewer, fixed Xvfb resolution, fullscreen entry/exit, and mobile layout. It uses
 the same disposable QA deployment and browser environment as the other suites.
+
+### Administrator workspace
+
+Players and administrators share the same library and automatic game launch. The only extra control for administrators is **Administration**, which opens the protected `/admin` page. The library shows only your own instances.
+
+The workspace separates **Access**, **Games**, **Platform**, **Appearance**, and **Instances**. Search accounts, game profiles, or active instances; section links can be bookmarked, and switching sections preserves unsaved form values. Administrators can launch a game with a selected test resolution from **Games**.

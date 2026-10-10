@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GameDock | Administration</title>
+    <link rel="stylesheet" href="/assets/style.css" />
+    <link rel="stylesheet" href="/assets/admin.css" />
+    <script src="/assets/theme.js" defer></script>
+    <script src="/assets/admin.js" defer></script>
+  </head>
+  <body class="admin-page">
+    <header class="admin-header">
+      <div class="admin-heading">
+        <a href="/" class="brand"
+          ><img class="brand-logo" alt="" hidden /><span
+            class="mark"
+            aria-hidden="true"
+            >▦</span
+          ><span id="brand" data-platform-name>GameDock</span></a
+        ><span class="workspace-name">Administration</span>
+      </div>
+      <a href="/" class="button secondary" id="close-admin">Back to library</a>
+    </header>
+    <aside class="admin-sidebar">
+      <nav aria-label="Administration sections" id="admin-nav">
+        <a href="#access" aria-current="page">Access</a>
+        <a href="#games">Games</a>
+        <a href="#platform">Platform</a>
+        <a href="#appearance">Appearance</a>
+        <a href="#instances">Instances</a>
+      </nav>
+      <p class="admin-operator" id="admin-operator"></p>
+    </aside>
+    <main class="admin-main" id="admin-main">
+      <p id="notice" role="status" aria-live="polite">
+        Loading administration…
+      </p>
+      <div id="admin-workspace" hidden>
+        <section
+          id="section-access"
+          class="admin-section"
+          aria-labelledby="access-title"
+        >
+          <div class="workspace-title">
+            <h1 id="access-title" tabindex="-1">Access</h1>
+            <p>Invite players and manage their accounts and game allowances.</p>
+          </div>
+          <div class="admin-panel">
+            <section class="invitations">
+              <h2>Registration invitations</h2>
+              <p>Create codes with usage limits and an expiration date.</p>
+              <form id="invitation-form">
+                <label
+                  >Label<input
+                    name="label"
+                    maxlength="100"
+                    placeholder="Friends" /></label
+                ><label
+                  >Maximum uses<input
+                    name="max_uses"
+                    type="number"
+                    min="1"
+                    max="1000"
+                    value="1"
+                    required /></label
+                ><label
+                  >Valid for (days)<input
+                    name="expires_days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    value="7"
+                    required /></label
+                ><button>Create invitation</button>
+              </form>
+              <p id="invitation-result" role="status"></p>
+              <div id="invitations"></div>
+            </section>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Accounts</h2>
+                <p>Find a player to manage access and instance limits.</p>
+              </div>
+              <span id="account-count" class="count"></span>
+            </div>
+            <label class="search-field"
+              >Search accounts<input
+                id="account-search"
+                type="search"
+                placeholder="Username"
+                autocomplete="off"
+            /></label>
+            <div id="users"></div>
+          </div>
+        </section>
+        <section
+          id="section-games"
+          class="admin-section"
+          aria-labelledby="games-title"
+          hidden
+        >
+          <div class="workspace-title">
+            <h1 id="games-title" tabindex="-1">Games</h1>
+            <p>
+              Manage the catalog, launch settings and resources for each game.
+            </p>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>Game catalog</h2>
+                <p>Changes here control what players can launch.</p>
+              </div>
+              <button type="button" id="add-game">Add game</button>
+            </div>
+            <label class="search-field"
+              >Search games<input
+                id="game-search"
+                type="search"
+                placeholder="Name or game ID"
+                autocomplete="off"
+            /></label>
+            <div id="games" class="managed-games"></div>
+          </div>
+          <div class="admin-panel" id="game-editor">
+            <form id="profile">
+              <h3 id="profile-title">Add game</h3>
+              <p id="profile-mode-help">
+                Create a game with a new ID. Use Edit on a game card to modify
+                an existing game.
+              </p>
+              <label
+                >JSON definition<textarea
+                  name="definition"
+                  rows="22"
+                  spellcheck="false"
+                  required
+                ></textarea>
+              </label>
+              <div class="appearance-grid">
+                <label
+                  >Game RAM (MiB)<input
+                    name="memory_mb"
+                    type="number"
+                    min="128"
+                    max="1048576"
+                    step="1"
+                    placeholder="Use platform default"
+                /></label>
+                <label
+                  >Game CPU<input
+                    name="cpus"
+                    type="number"
+                    min="0.1"
+                    max="256"
+                    step="0.01"
+                    placeholder="Use platform default"
+                /></label>
+              </div>
+              <p class="help">
+                Leave blank to inherit platform resources. Changes apply to new
+                instances.
+              </p>
+              <div class="actions">
+                <button>Save game</button
+                ><button type="button" id="new-game" class="secondary">
+                  New game
+                </button>
+              </div>
+              <p id="profile-help" role="status"></p>
+            </form>
+          </div>
+        </section>
+        <section
+          id="section-platform"
+          class="admin-section"
+          aria-labelledby="platform-title"
+          hidden
+        >
+          <div class="workspace-title">
+            <h1 id="platform-title" tabindex="-1">Platform</h1>
+            <p>
+              Set your server identity, registration policy and session
+              defaults.
+            </p>
+          </div>
+          <div class="admin-panel">
+            <form id="settings">
+              <h3>Your platform</h3>
+              <label>Name<input name="name" maxlength="80" required /></label
+              ><label
+                >Banner / welcome message<textarea
+                  name="banner"
+                  maxlength="500"
+                ></textarea></label
+              ><label
+                >Banner image (optional URL)<input
+                  type="url"
+                  name="banner_image"
+                  maxlength="1000" /></label
+              ><label class="check"
+                ><input type="checkbox" name="registration" />Allow account
+                registration</label
+              ><label class="check"
+                ><input type="checkbox" name="invite_required" />Require an
+                invitation code</label
+              >
+              <label class="check"
+                ><input type="checkbox" name="desktop_toolbar" />Show desktop
+                toolbar</label
+              >
+              <label
+                >Stop inactive instances after (minutes)<input
+                  name="idle_minutes"
+                  type="number"
+                  min="0"
+                  max="1440"
+                  required
+              /></label>
+              <p class="help">
+                Use 0 to disable inactivity cleanup. Only mouse and keyboard
+                input count as activity.
+              </p>
+              <label
+                >Concurrent instances<input
+                  name="max_instances"
+                  type="number"
+                  min="1"
+                  max="100"
+                  required /></label
+              ><label
+                >Instances per user<input
+                  name="per_user"
+                  type="number"
+                  min="1"
+                  max="100"
+                  required
+              /></label>
+              <h3>Session resources</h3>
+              <label
+                >Default RAM per instance (MiB)<input
+                  name="memory_mb"
+                  type="number"
+                  min="128"
+                  max="1048576"
+                  step="1"
+                  required
+              /></label>
+              <label
+                >Default CPU per instance<input
+                  name="cpus"
+                  type="number"
+                  min="0.1"
+                  max="256"
+                  step="0.01"
+                  required
+              /></label>
+              <p class="help">
+                1024 MiB = 1 GiB. CPU accepts fractions (0.5 = half a core).
+                Applies to new instances; each game can override these defaults.
+              </p>
+              <button>Save settings</button>
+            </form>
+          </div>
+        </section>
+        <section
+          id="section-appearance"
+          class="admin-section"
+          aria-labelledby="appearance-title"
+          hidden
+        >
+          <div class="workspace-title">
+            <h1 id="appearance-title" tabindex="-1">Appearance</h1>
+            <p>
+              Customize the library, sign-in page, viewer and administration.
+            </p>
+          </div>
+          <div class="admin-panel">
+            <form id="appearance" class="appearance-form">
+              <h3>Appearance</h3>
+              <p>
+                Choose a starting theme, then make it yours. Preview changes
+                here before saving for everyone.
+              </p>
+              <div class="appearance-grid">
+                <label
+                  >Theme<select name="theme" aria-label="Theme">
+                    <option value="classic">Classic · light blue</option>
+                    <option value="midnight">Midnight · dark</option>
+                    <option value="forest">Forest · green</option>
+                  </select></label
+                >
+                <label
+                  >Font<select name="font" aria-label="Font">
+                    <option value="trebuchet">Trebuchet</option>
+                    <option value="system">System</option>
+                    <option value="verdana">Verdana</option>
+                    <option value="mono">Monospace</option>
+                  </select></label
+                >
+                <label
+                  >Corner radius (px)<input
+                    name="radius"
+                    type="number"
+                    min="0"
+                    max="32"
+                    required
+                /></label>
+                <label
+                  >Content width (px)<input
+                    name="content_width"
+                    type="number"
+                    min="800"
+                    max="1920"
+                    required
+                /></label>
+                <label
+                  >Logo image URL<input
+                    name="logo_url"
+                    type="url"
+                    maxlength="1000"
+                /></label>
+                <label
+                  >Page background image URL<input
+                    name="background_image"
+                    type="url"
+                    maxlength="1000"
+                /></label>
+              </div>
+              <label
+                >Footer message<input name="footer" maxlength="500"
+              /></label>
+              <div id="theme-colors" class="appearance-colors"></div>
+              <details class="advanced">
+                <summary>Advanced customization</summary>
+                <label
+                  >Custom CSS<textarea
+                    id="custom-css"
+                    name="custom_css"
+                    rows="8"
+                    maxlength="20000"
+                    spellcheck="false"
+                    placeholder=".intro { padding-top: 30px; }"
+                  ></textarea>
+                </label>
+                <p class="help">
+                  Styles apply to the library, sign-in and viewer pages. Use CSS
+                  for layout and details beyond the controls above. Save only
+                  styles you trust.
+                </p>
+                <div class="actions theme-actions">
+                  <button type="button" id="export-theme" class="secondary">
+                    Export appearance</button
+                  ><label
+                    >Import appearance JSON<input
+                      id="import-theme"
+                      type="file"
+                      accept="application/json,.json"
+                  /></label>
+                </div>
+              </details>
+              <div class="actions theme-actions">
+                <button>Save appearance</button
+                ><button type="button" id="preview-theme" class="secondary">
+                  Preview</button
+                ><button type="button" id="cancel-theme" class="secondary">
+                  Discard preview</button
+                ><button type="button" id="reset-theme" class="secondary">
+                  Reset to preset
+                </button>
+              </div>
+              <p id="appearance-status" role="status" aria-live="polite"></p>
+            </form>
+          </div>
+        </section>
+        <section
+          id="section-instances"
+          class="admin-section"
+          aria-labelledby="instances-title"
+          hidden
+        >
+          <div class="workspace-title">
+            <h1 id="instances-title" tabindex="-1">Instances</h1>
+            <p>Inspect and manage running games across all accounts.</p>
+          </div>
+          <div class="admin-panel">
+            <div class="panel-heading">
+              <h2>Running instances</h2>
+              <button id="refresh" class="secondary">Refresh instances</button>
+            </div>
+            <label class="search-field"
+              >Search instances<input
+                id="instance-search"
+                type="search"
+                placeholder="Game, username or instance ID"
+                autocomplete="off"
+            /></label>
+            <div id="instances"></div>
+          </div>
+        </section>
+      </div>
+      <footer>
+        <strong data-platform-name>GameDock</strong
+        ><span id="footer-message">Game desktops under your control.</span>
+      </footer>
+    </main>
+  </body>
+</html>

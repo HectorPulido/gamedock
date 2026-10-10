@@ -509,6 +509,31 @@ class API(unittest.IsolatedAsyncioTestCase):
         catalog = await (await self.client.get("/api/catalog")).json()
         self.assertEqual(catalog["settings"]["appearance"], appearance)
 
+    async def test_separate_admin_page_permissions(self):
+        response = await self.client.get("/admin", allow_redirects=False)
+        self.assertEqual(response.status, 302)
+        self.assertEqual(response.headers["Location"], "/")
+        alice = await self.login()
+        response = await self.client.get("/admin", headers=alice)
+        self.assertEqual(response.status, 403)
+        admin = await self.login("admin", "login")
+        response = await self.client.get("/admin", headers=admin)
+        self.assertEqual(response.status, 200)
+        page = await response.text()
+        self.assertIn('id="admin-nav"', page)
+        self.assertIn('id="settings"', page)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        response = await self.client.get("/", headers=admin)
+        page = await response.text()
+        for admin_control in (
+            'id="settings"',
+            'id="profile"',
+            'id="admin"',
+            'id="appearance"',
+            'id="add-game"',
+        ):
+            self.assertNotIn(admin_control, page)
+
     async def test_reconcile_process_exit(self):
         alice = await self.login()
         response = await self.client.post(

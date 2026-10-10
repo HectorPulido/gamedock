@@ -100,3 +100,10 @@ Reproduce the feature checks with `tests/customization_browser.py`; the standard
 `./scripts/qa.sh` now includes it. Screenshots from this run are under
 `/tmp/gamedock-personalize-artifacts`. Credentials and application data remain
 outside Git. Resource changes affect new sessions and do not restart games.
+
+## Separate administrator workspace (2026-10-10)
+
+- 16 API tests pass, including unauthenticated redirect and player denial for `/admin`.
+- Chromium verifies identical player/admin game cards, a single administrator link, automatic launch, and own instances in the library.
+- Workspace checks cover account/game/instance searches, preserved drafts, browser history, bookmarked sections, all three themes, and mobile layouts.
+- Customization regression passes: branding, appearance preview/import/export, real Docker CPU/RAM limits, scaled input, unchanged desktop resolution, fullscreen, and mobile.
