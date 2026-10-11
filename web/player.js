@@ -151,6 +151,20 @@ frame.addEventListener("load", () => {
   viewer.filter(filterControl.value);
   try {
     const doc = frame.contentDocument;
+    // Xpra's own fullscreen resizes its viewport/canvas while the X display
+    // stays fixed. Route its toolbar and global shortcut through the outer
+    // player so the browser continues mapping input in source coordinates.
+    frame.contentWindow.toggle_fullscreen = toggleFullscreen;
+    doc.addEventListener(
+      "click",
+      (event) => {
+        if (!event.target.closest?.("#fullscreen_button")) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        toggleFullscreen();
+      },
+      true,
+    );
     for (const type of [
       "pointerdown",
       "pointermove",
@@ -397,7 +411,7 @@ window.addEventListener("pagehide", () => {
 });
 const fullscreenButton = document.querySelector("#fullscreen");
 fullscreenButton.hidden = !document.fullscreenEnabled;
-fullscreenButton.onclick = async () => {
+async function toggleFullscreen() {
   try {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await document.body.requestFullscreen();
@@ -407,7 +421,8 @@ fullscreenButton.onclick = async () => {
       { kind: "error" },
     );
   }
-};
+}
+fullscreenButton.onclick = toggleFullscreen;
 document.addEventListener("fullscreenchange", () => {
   const active = !!document.fullscreenElement;
   fullscreenButton.textContent = active ? "Exit fullscreen" : "Fullscreen";
