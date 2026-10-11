@@ -506,3 +506,6 @@ input[type="color"] {
   stroke-linejoin: round;
   pointer-events: none;
 }
+
+.library-page > header,
+.library-page #auth { border: 0; }
