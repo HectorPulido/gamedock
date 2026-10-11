@@ -184,3 +184,16 @@ outside Git. Resource changes affect new sessions and do not restart games.
 - Reproduce with `scripts/qa-streaming.sh`: its dedicated QA project/volume is
   recreated and removed; user GameDock data is untouched. HTTPS deployment and
   trusted certificates are described in `examples/https/README.md`.
+
+Controller update: 37 Python tests ran (32 passed, 5 runtime-only skips), browser QA
+passed mobile auto-detection, simultaneous NippleJS movement/face buttons,
+cancellation, standard Gamepad polling, disconnect and disabling. A local
+Xvfb runtime test verified actual X11 key state and watchdog release after
+750 ms without updates. Authorization/origin/payload checks passed. Native
+Linux uinput and real USB/Bluetooth hardware are prepared but unverified on
+this Mac. Remote Dofus containers were not changed.
+
+A real authenticated portal forwarded input into a newly launched runtime.
+The actual Xpra viewer kept controller polling active after iframe load, and
+Settings hid/restored the touch overlay. Local portal/runtime/OpenTTD/GPU images
+were updated; the optional Linux evdev image was not built or hardware-tested.

@@ -75,6 +75,13 @@ def main():
     (html_dir / "default-settings.txt").write_text(defaults)
     configure_software()
     children = []
+    root_input = os.getuid() == 0 and os.environ.get("GAMEDOCK_UINPUT") == "1"
+    if root_input:
+        os.chown(runtime, 1000, 1000)
+        children.append(subprocess.Popen([sys.executable, "/usr/local/bin/gamepad.py"]))
+        os.setgroups([gid for gid in os.getgroups() if gid != 0])
+        os.setgid(1000)
+        os.setuid(1000)
 
     def stop(*_):
         raise SystemExit(0)
@@ -100,13 +107,17 @@ def main():
         while subprocess.run(
             ["xdpyinfo"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         ).returncode:
-            if children[0].poll() is not None or time.monotonic() > deadline:
+            if children[-1].poll() is not None or time.monotonic() > deadline:
                 raise RuntimeError("Desktop failed to start")
             time.sleep(0.1)
         command, gpu_info = prepare_command(command)
         (Path(runtime) / "gpu.json").write_text(json.dumps(gpu_info))
         print("GameDock graphics: " + json.dumps(gpu_info), flush=True)
         children.append(subprocess.Popen(["openbox"]))
+        if not root_input:
+            children.append(
+                subprocess.Popen([sys.executable, "/usr/local/bin/gamepad.py"])
+            )
         children.append(
             subprocess.Popen(
                 [

@@ -10,6 +10,7 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:8080}
       ADMIN_USER: ${ADMIN_USER:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Define ADMIN_PASSWORD in .env}
+      GAMEDOCK_UINPUT: ${GAMEDOCK_UINPUT:-0}
       DATABASE: /data/gamedock.sqlite
       GAMEDOCK_NAMESPACE: ${GAMEDOCK_NAMESPACE:-${COMPOSE_PROJECT_NAME:-gamedock}}
     volumes:

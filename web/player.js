@@ -4,6 +4,7 @@ const stage = document.querySelector("#desktop-stage");
 const notify = (text, options = {}) =>
   GameDockNotifications.show(text, options);
 const viewer = GameDockViewer.create(frame);
+const controller = GameDockController.create(frame, sid);
 const scaleControl = document.querySelector("#viewer-scale");
 const filterControl = document.querySelector("#canvas-filter");
 const diagnostics = document.querySelector("#streaming-diagnostics");
@@ -66,6 +67,7 @@ function stoppedDesktop() {
   frame.hidden = true;
   frame.removeAttribute("src");
   clearInterval(diagnosticTimer);
+  controller.dispose();
   viewer.dispose();
   const empty = document.createElement("section");
   empty.className = "desktop-stopped";
@@ -416,6 +418,7 @@ document.querySelector("#diagnostics-close").onclick = () => {
 };
 window.addEventListener("pagehide", () => {
   clearInterval(diagnosticTimer);
+  controller.dispose();
   viewer.dispose();
 });
 const fullscreenButton = document.querySelector("#fullscreen");

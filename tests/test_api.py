@@ -49,6 +49,37 @@ class API(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, 200, await result.text())
         return {"Authorization": "Bearer " + (await result.json())["token"]}
 
+    async def test_controller_session_authorization_and_payload_validation(self):
+        admin = await self.login("admin", "login")
+        response = await self.client.post(
+            "/api/instances", headers=admin, json={"game": "desktop"}
+        )
+        sid = (await response.json())["id"]
+        path = f"/desktop/{sid}/gamedock-controller"
+        alice = await self.login()
+        response = await self.client.post(path, headers=alice, json={})
+        self.assertIn(response.status, (403, 404))
+        response = await self.client.post(
+            path, headers={**admin, "Origin": "https://evil.example"}, json={}
+        )
+        self.assertEqual(response.status, 403)
+        info = {
+            "State": {"Running": True},
+            "NetworkSettings": {
+                "Networks": {"gamedock-session-" + sid: {"IPAddress": "127.0.0.1"}}
+            },
+        }
+        with (
+            patch.object(self.docker, "inspect", AsyncMock(return_value=info)),
+            patch.object(self.docker, "ensure_connection", AsyncMock(), create=True),
+        ):
+            response = await self.client.post(
+                path, headers=admin, json={"axes": [999, 0, 0, 0]}
+            )
+            self.assertEqual(response.status, 400)
+            response = await self.client.post(path, headers=admin, data="{}")
+            self.assertEqual(response.status, 415)
+
     async def test_streaming_permissions_inheritance_and_saved_defaults(self):
         admin = await self.login("admin", "login")
         alice = await self.login()

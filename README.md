@@ -464,3 +464,5 @@ validation requires a Linux GPU host; OrbStack on this Mac has no GPU passthroug
 
 For HTTPS / browser H.264 decoding, effective bandwidth budgets and Wine process
 accounting, see [streaming deployment notes](examples/https/README.md).
+
+Controllers: [mobile touch overlay and USB/Bluetooth setup](examples/controllers/README.md).

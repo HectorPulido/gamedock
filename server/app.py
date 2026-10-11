@@ -290,6 +290,22 @@ class Docker:
             },
             "ExposedPorts": {"6084/tcp": {}},
         }
+        # Explicit operator opt-in; never run sessions privileged.
+        if os.environ.get("GAMEDOCK_UINPUT") == "1":
+            definition["HostConfig"].setdefault("Devices", []).append(
+                {
+                    "PathOnHost": "/dev/uinput",
+                    "PathInContainer": "/dev/uinput",
+                    "CgroupPermissions": "rw",
+                }
+            )
+            definition["User"] = "0:0"
+            definition["Env"].append("GAMEDOCK_UINPUT=1")
+            definition["HostConfig"]["CapAdd"] = ["MKNOD", "SETUID", "SETGID", "CHOWN"]
+            definition["HostConfig"]["DeviceCgroupRules"] = ["c 13:* r"]
+            definition["HostConfig"]["Tmpfs"] = {
+                "/dev/input": "rw,nosuid,noexec,mode=0770,uid=1000,gid=0"
+            }
         gpu_host, gpu_env = docker_gpu(profile.get("gpu", {}))
         definition["HostConfig"].update(gpu_host)
         definition["Env"].extend(gpu_env)
@@ -917,7 +933,8 @@ async def proxy(request):
     if instance["status"] != "running":
         raise web.HTTPConflict(text="Instance stopped")
     if (
-        request.match_info.get("tail", "") in ("", "index.html")
+        request.method == "GET"
+        and request.match_info.get("tail", "") in ("", "index.html")
         and request.query.get("floating_menu")
         != ("true" if config(request.app)["desktop_toolbar"] else "false")
         and request.headers.get("Upgrade", "").lower() != "websocket"
@@ -946,7 +963,9 @@ async def proxy(request):
         raise web.HTTPServiceUnavailable(text="The desktop is not ready yet")
     from yarl import URL
 
-    tail = request.match_info.get("tail", "")
+    tail = request.match_info.get(
+        "tail", "gamedock-controller" if request.method == "POST" else ""
+    )
     target = URL.build(
         scheme="http",
         host=network["IPAddress"],
@@ -955,6 +974,36 @@ async def proxy(request):
         query_string=request.query_string,
     )
     http = request.app["http"]
+    if request.method == "POST":
+        if tail != "gamedock-controller":
+            raise web.HTTPNotFound()
+        if request.content_type != "application/json":
+            raise web.HTTPUnsupportedMediaType(text="JSON is required")
+        body = await request.json()
+        from runtime.gamepad import validate_state
+
+        axes, buttons = validate_state(body)
+        if (
+            any(abs(value) > 0.15 for value in axes) or any(buttons)
+        ) and time.time() - instance["last_activity"] >= 5:
+            request.app["db"].execute(
+                "UPDATE instances SET last_activity=? WHERE id=? AND status='running'",
+                (time.time(), instance["id"]),
+            )
+        target = target.with_port(6085).with_path("/").with_query(None)
+        try:
+            async with http.post(
+                target, json=body, timeout=aiohttp.ClientTimeout(total=2)
+            ) as upstream:
+                return web.Response(
+                    status=upstream.status,
+                    body=await upstream.read(),
+                    content_type="application/json",
+                )
+        except (aiohttp.ClientError, asyncio.TimeoutError):
+            raise web.HTTPServiceUnavailable(
+                text="Controller requires an updated runtime image"
+            )
     if request.headers.get("Upgrade", "").lower() == "websocket":
         protocols = [
             p.strip()
@@ -1314,6 +1363,7 @@ def create_app(db_path=None, docker=None):
     app.router.add_delete("/api/admin/games/{game}", admin_games)
     app.router.add_get("/api/admin/users", admin_users)
     app.router.add_patch("/api/admin/users/{uid}", admin_users)
+    app.router.add_post("/desktop/{sid}/gamedock-controller", proxy)
     app.router.add_get("/desktop/{sid}/{tail:.*}", proxy)
     app.router.add_get("/", platform_page)
     app.router.add_get("/admin", admin_page)
