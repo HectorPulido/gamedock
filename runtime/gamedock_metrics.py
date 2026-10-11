@@ -10,7 +10,15 @@ import time
 
 
 class CaptureMetrics:
-    def __init__(self, settings, clock=time.monotonic):
+    def __init__(
+        self,
+        settings,
+        clock=time.monotonic,
+        proc_root="/proc",
+        cgroup_root="/sys/fs/cgroup",
+    ):
+        self.proc_root = Path(proc_root)
+        self.cgroup_root = Path(cgroup_root)
         self.clock = clock
         self.started = clock()
         self.settings = settings
@@ -70,9 +78,14 @@ class CaptureMetrics:
         }
 
     def cpu(self, now):
-        """Separate game CPU from Xpra/Xvfb CPU; 100% means one logical core."""
+        """Account for reparented game processes in the dedicated PID namespace.
+
+        Docker exec trees (PPID 0), the runtime and PID 1 are infrastructure.
+        Wine orphans adopted by PID 1 remain game processes. RSS sums may count
+        shared pages repeatedly; PSS and cgroup usage are reported separately.
+        """
         processes = {}
-        for path in Path("/proc").glob("[0-9]*/stat"):
+        for path in self.proc_root.glob("[0-9]*/stat"):
             try:
                 raw = path.read_text()
                 name = raw[raw.index("(") + 1 : raw.rindex(")")]
@@ -82,11 +95,11 @@ class CaptureMetrics:
                     name,
                     int(fields[11]) + int(fields[12]),
                     int(fields[21]) * os.sysconf("SC_PAGE_SIZE"),
+                    int(fields[19]),
                 )
             except (OSError, ValueError, IndexError):
                 continue
-        xpra_pid = os.getpid()
-        root = os.getppid()
+        xpra_pid, root = os.getpid(), os.getppid()
 
         def descendant(pid, ancestor):
             visited = set()
@@ -97,35 +110,85 @@ class CaptureMetrics:
                 pid = processes[pid][0]
             return False
 
-        totals = {"game": 0, "stream": 0}
+        ticks_by_pid = {}
         memory = {"game": 0, "stream": 0}
-        for pid, (_, name, ticks, rss) in processes.items():
-            if not descendant(pid, root) or pid == root:
+        pss = {"game": 0, "stream": 0}
+        counts = {"game": 0, "stream": 0}
+        pss_complete = {"game": True, "stream": True}
+        for pid, (_, name, ticks, rss, started) in processes.items():
+            if pid in (1, root) or not (descendant(pid, root) or descendant(pid, 1)):
                 continue
             kind = (
                 "stream"
                 if descendant(pid, xpra_pid) or name in ("Xvfb", "openbox")
                 else "game"
             )
-            totals[kind] += ticks
+            ticks_by_pid[(pid, started)] = (kind, ticks)
             memory[kind] += rss
+            counts[kind] += 1
+            try:
+                lines = (
+                    (self.proc_root / str(pid) / "smaps_rollup")
+                    .read_text()
+                    .splitlines()
+                )
+                pss[kind] += next(
+                    int(line.split()[1]) * 1024
+                    for line in lines
+                    if line.startswith("Pss:")
+                )
+            except (OSError, ValueError, StopIteration):
+                pss_complete[kind] = False
         previous = self.cpu_previous
-        self.cpu_previous = (now, totals)
+        self.cpu_previous = (now, ticks_by_pid)
         result = {
             kind + "_rss_mb": round(rss / 1024**2, 1) for kind, rss in memory.items()
         }
-        for kind in totals:
+        for kind in memory:
+            result[kind + "_processes"] = counts[kind]
+            result[kind + "_pss_mb"] = (
+                round(pss[kind] / 1024**2, 1) if pss_complete[kind] else None
+            )
+            delta = sum(
+                max(0, ticks - previous[1][key][1])
+                for key, (group, ticks) in ticks_by_pid.items()
+                if previous and group == kind and key in previous[1]
+            )
             result[kind + "_cpu_percent"] = (
                 None
                 if previous is None
                 else round(
-                    max(0, totals[kind] - previous[1][kind])
+                    delta
                     / os.sysconf("SC_CLK_TCK")
                     / max(0.001, now - previous[0])
                     * 100,
                     1,
                 )
             )
+        try:
+            result["container_memory_mb"] = round(
+                int((self.cgroup_root / "memory.current").read_text()) / 1024**2, 1
+            )
+        except (OSError, ValueError):
+            result["container_memory_mb"] = None
+        try:
+            stats = dict(
+                line.split()
+                for line in (self.cgroup_root / "cpu.stat").read_text().splitlines()
+            )
+            usage = int(stats["usage_usec"])
+            old = getattr(self, "container_previous", None)
+            self.container_previous = (now, usage)
+            result["container_cpu_percent"] = (
+                None
+                if old is None
+                else round(
+                    max(0, usage - old[1]) / 1_000_000 / max(0.001, now - old[0]) * 100,
+                    1,
+                )
+            )
+        except (OSError, ValueError, KeyError):
+            result["container_cpu_percent"] = None
         return result
 
 

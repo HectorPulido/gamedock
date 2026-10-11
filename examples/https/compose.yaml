@@ -1,0 +1,14 @@
+# docker compose -f compose.yaml -f examples/https/compose.yaml up -d --build
+services:
+  portal:
+    environment:
+      TLS_CERTFILE: /tls/fullchain.pem
+      TLS_KEYFILE: /tls/privkey.pem
+    volumes:
+      - ${TLS_DIRECTORY:?Set TLS_DIRECTORY to your certificate directory}:/tls:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import ssl, urllib.request; urllib.request.urlopen('https://127.0.0.1:8080/api/catalog', context=ssl._create_unverified_context())"

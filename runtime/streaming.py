@@ -105,7 +105,7 @@ STREAMING_FIELDS = {
         1000,
         "Connection",
         0.1,
-        "0 removes the fixed limit.",
+        "Adaptive encoding budget per viewer; 0 removes the fixed limit. This is not a strict network traffic shaper.",
     ),
     "bandwidth_detection": toggle("Adapt to available bandwidth", True, "Connection"),
     "compression_level": number(

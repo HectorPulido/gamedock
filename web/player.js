@@ -317,9 +317,17 @@ const metrics = [
   ["hourly_gb", "Estimated image data", "GB/hour"],
   ["game_cpu_percent", "Game CPU", "%"],
   ["stream_cpu_percent", "Xpra / display CPU", "%"],
-  ["game_rss_mb", "Game process memory", "MiB"],
+  ["game_rss_mb", "Game RSS (sum)", "MiB"],
+  ["game_pss_mb", "Game PSS (shared pages apportioned)", "MiB"],
+  ["game_processes", "Game processes", ""],
+  ["container_memory_mb", "Container memory (cgroup)", "MiB"],
+  ["container_cpu_percent", "Container CPU (cgroup)", "%"],
   ["stream_rss_mb", "Streaming process memory", "MiB"],
   ["codecs", "Observed codecs", ""],
+  ["client_codecs", "Browser codecs", ""],
+  ["h264_status", "H.264 negotiation", ""],
+  ["bandwidth_budget_mbps", "Effective client bandwidth budget", "Mbps"],
+  ["bandwidth_window_mbps", "Window bandwidth budget", "Mbps"],
   ["gpu_vendor", "Graphics profile", ""],
   ["gpu_renderer", "OpenGL renderer", ""],
   ["software_threads", "CPU render workers (configured)", ""],
@@ -371,9 +379,10 @@ function sampleDiagnostics() {
             : "Live sample · capture target " + sample.target_hz + " Hz";
   for (const [key, , unit] of metrics) {
     const value = sample[key];
-    const serverMetric = /^(capture|game_|stream_|gpu_|software_threads)/.test(
-      key,
-    );
+    const serverMetric =
+      /^(capture|game_|stream_|gpu_|container_|bandwidth_|software_threads)/.test(
+        key,
+      );
     values.querySelector('[data-metric="' + key + '"]').textContent =
       value == null || (serverMetric && !fresh)
         ? "—"

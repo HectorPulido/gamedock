@@ -159,6 +159,14 @@ window.GameDockViewer = (() => {
           .map(([code]) => code)
           .join(", "),
         decode_errors: errors,
+        client_codecs: client.supported_encodings.join(", "),
+        h264_status: codecs.has("h264")
+          ? "Receiving H.264"
+          : client.supported_encodings.includes("h264")
+            ? "Supported; waiting for video frames"
+            : !frame.contentWindow.isSecureContext
+              ? "Unavailable: use HTTPS or localhost"
+              : "Unavailable: browser decoder not supported",
       };
       if (dt > 0) {
         for (const [field, count] of Object.entries({
@@ -187,6 +195,13 @@ window.GameDockViewer = (() => {
             typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value)
               ? Number(value)
               : value;
+      for (const [key, pattern] of Object.entries({
+        bandwidth_budget_mbps: /(?:^|\.)bandwidth\.actual$/,
+        bandwidth_window_mbps: /(?:^|\.)window\.\d+\.bandwidth-limit$/,
+      })) {
+        const entry = Object.entries(flat).find(([name]) => pattern.test(name));
+        result[key] = entry ? Number(entry[1]) / 1e6 : null;
+      }
       const latency = Object.entries(flat).find(([key]) =>
         /(?:^|\.)damage\.client-latency$/.test(key),
       );

@@ -2,6 +2,8 @@ FROM fedora:43
 COPY xpra.repo /etc/yum.repos.d/xpra.repo
 RUN dnf install -y --setopt=install_weak_deps=False xpra xpra-html5 xpra-x11 gobject-introspection xorg-x11-server-Xvfb xdpyinfo openbox xterm liberation-mono-fonts python3 && dnf clean all && useradd --uid 1000 --create-home player
 RUN dnf install -y --setopt=install_weak_deps=False glx-utils mesa-dri-drivers mesa-libGL mesa-libEGL && dnf clean all
+COPY patch-xpra-bandwidth.py /tmp/patch-xpra-bandwidth.py
+RUN python3 /tmp/patch-xpra-bandwidth.py && rm /tmp/patch-xpra-bandwidth.py
 COPY patch-xpra-idle.py /tmp/patch-xpra-idle.py
 RUN python3 /tmp/patch-xpra-idle.py && rm /tmp/patch-xpra-idle.py
 COPY gamedock_metrics.py patch-xpra-metrics.py /tmp/

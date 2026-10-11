@@ -461,3 +461,6 @@ not automatically enable hardware video encoding.
 See [GPU setup, demo Compose and game profiles](examples/gpu/README.md) for host
 drivers, permissions, test commands and compatibility limits. Physical GPU
 validation requires a Linux GPU host; OrbStack on this Mac has no GPU passthrough.
+
+For HTTPS / browser H.264 decoding, effective bandwidth budgets and Wine process
+accounting, see [streaming deployment notes](examples/https/README.md).

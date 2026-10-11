@@ -112,7 +112,11 @@
       </p>
       <p class="diagnostics-help">
         CPU: 100% = one core. Data/hour projects the current image payload rate
-        and excludes audio, protocol and TLS overhead.
+        and excludes audio, protocol and TLS overhead. Bandwidth is an adaptive
+        encoding budget, not a strict network traffic shaper. RSS sums can count
+        shared pages repeatedly; PSS apportions them. Container memory also
+        includes page cache and kernel usage. Game metrics include Wine
+        processes adopted by the container init.
       </p>
     </aside>
     <main id="desktop-stage">

@@ -167,3 +167,20 @@ outside Git. Resource changes affect new sessions and do not restart games.
   for all games.
 - Chromium renders a real `glxgears` scene from a GPU image with hardware disabled,
   and confirms llvmpipe plus an explicit three-worker setting in Diagnostics.
+
+## Bandwidth, H.264 and Wine metrics (2026-10-10)
+
+- Changes and tests are local to GameDock. No remote Dofus container was changed.
+- 34 host tests: 29 pass, five Xpra-only tests skip; all five pass in the
+  patched runtime. Lint and JavaScript syntax checks pass.
+- Isolated HTTPS Chromium sessions verify actual H.264 decoding at 1280×720
+  with zero decoder errors, and JPEG/WebP fallback in a browser without H.264.
+  Both sessions report 6 Mbps client and window budgets. This is Xpra's adaptive
+  encoding budget, not a strict network traffic shaper.
+- A real orphan process named Dofus.exe, adopted by PID 1, allocates 160 MiB;
+  game RSS/PSS and cgroup memory reflect it. Fixtures also cover CPU deltas,
+  PID reuse and Docker exec exclusion. Actual Wine/Dofus and an external client
+  remain to be verified on the destination server.
+- Reproduce with `scripts/qa-streaming.sh`: its dedicated QA project/volume is
+  recreated and removed; user GameDock data is untouched. HTTPS deployment and
+  trusted certificates are described in `examples/https/README.md`.

@@ -59,6 +59,18 @@ def main():
             for key in ("encoding", "quality", "min_quality", "speed", "min_speed")
         )
         + "\n"
+        + "bandwidth_limit = "
+        + str(round(settings["bandwidth_mbps"] * 1_000_000))
+        + "\n"
+        + "bandwidth_detection = "
+        + str(settings["bandwidth_detection"]).lower()
+        + "\n"
+        + "video_max_width = "
+        + size.split("x")[0]
+        + "\n"
+        + "video_max_height = "
+        + size.split("x")[1]
+        + "\n"
     )
     (html_dir / "default-settings.txt").write_text(defaults)
     configure_software()

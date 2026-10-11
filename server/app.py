@@ -1323,4 +1323,11 @@ def create_app(db_path=None, docker=None):
 
 
 if __name__ == "__main__":
-    web.run_app(create_app(), host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
+    from server.tls import server_tls
+
+    web.run_app(
+        create_app(),
+        host="0.0.0.0",
+        port=int(os.getenv("PORT", "8080")),
+        ssl_context=server_tls(),
+    )
