@@ -41,9 +41,9 @@ async def main():
         assert await page.locator("#touch-controller").is_visible()
         # Independent pointer captures allow stick + multiple buttons together.
         # Feed pointer events through the real NippleJS handlers.
-        rect = await page.locator(".touch-stick").bounding_box()
+        rect = await page.locator(".touch-stick-left").bounding_box()
         x, y = rect["x"] + rect["width"] / 2, rect["y"] + rect["height"] / 2
-        await page.locator(".touch-stick").dispatch_event(
+        await page.locator(".touch-stick-left").dispatch_event(
             "pointerdown",
             {
                 "pointerId": 1,
@@ -65,6 +65,30 @@ async def main():
                 "buttons": 1,
             },
         )
+        right = await page.locator(".touch-stick-right").bounding_box()
+        rx, ry = right["x"] + right["width"] / 2, right["y"] + right["height"] / 2
+        await page.locator(".touch-stick-right").dispatch_event(
+            "pointerdown",
+            {
+                "pointerId": 4,
+                "clientX": rx,
+                "clientY": ry,
+                "pageX": rx,
+                "pageY": ry,
+                "buttons": 1,
+            },
+        )
+        await page.locator("body").dispatch_event(
+            "pointermove",
+            {
+                "pointerId": 4,
+                "clientX": rx,
+                "clientY": ry - 35,
+                "pageX": rx,
+                "pageY": ry - 35,
+                "buttons": 1,
+            },
+        )
         await page.locator('[data-button="0"]').dispatch_event(
             "pointerdown", {"pointerId": 2}
         )
@@ -73,7 +97,7 @@ async def main():
         )
         await page.wait_for_timeout(120)
         assert await page.evaluate(
-            "states.some(s => s.buttons[0] && s.buttons[2] && s.axes.some(v=>v!==0))"
+            "states.some(s => s.buttons[0] && s.buttons[2] && s.axes[0] !== 0 && s.axes[3] !== 0)"
         )
         await page.locator('[data-button="0"]').dispatch_event(
             "pointercancel", {"pointerId": 2}
@@ -83,6 +107,10 @@ async def main():
         )
         await page.locator("body").dispatch_event(
             "pointerup", {"pointerId": 1, "clientX": x + 35, "clientY": y, "buttons": 0}
+        )
+        await page.locator("body").dispatch_event(
+            "pointercancel",
+            {"pointerId": 4, "clientX": rx, "clientY": ry - 35, "buttons": 0},
         )
         await page.wait_for_timeout(120)
         assert await page.evaluate(
@@ -118,6 +146,45 @@ async def main():
         )
         await page.select_option("#controller-mode", "touch", force=True)
         await page.screenshot(path="/tmp/artifacts/controller-mobile.png")
+        for width, height in [
+            (844, 390),
+            (667, 375),
+            (568, 320),
+            (390, 844),
+            (320, 568),
+        ]:
+            await page.set_viewport_size({"width": width, "height": height})
+            await page.evaluate(
+                "document.querySelector('#desktop-stage').style.height = ''"
+            )
+            await page.wait_for_timeout(150)
+            rects = await page.evaluate(
+                """() => [...document.querySelectorAll('#touch-controller button, .touch-stick')].map(el => ({label:el.getAttribute('aria-label') || el.textContent, r:el.getBoundingClientRect().toJSON()}))"""
+            )
+            for item in rects:
+                rect = item["r"]
+                assert rect["width"] >= 44 and rect["height"] >= 44, (
+                    width,
+                    height,
+                    item,
+                )
+                assert (
+                    rect["x"] >= -1
+                    and rect["y"] >= -1
+                    and rect["right"] <= width + 1
+                    and rect["bottom"] <= height + 1
+                ), (width, height, item)
+            await page.screenshot(
+                path=f"/tmp/artifacts/controller-{width}x{height}.png"
+            )
+        await page.set_viewport_size({"width": 390, "height": 844})
+        await page.locator("#player-settings").evaluate("(el) => el.showModal()")
+        await page.screenshot(path="/tmp/artifacts/controller-settings.png")
+        assert (
+            await page.locator("#controller-options-title").inner_text()
+            == "Controllers"
+        )
+        assert "Automático" not in await page.locator("body").inner_text()
         await page.evaluate("controller.dispose()")
         await browser.close()
         print(

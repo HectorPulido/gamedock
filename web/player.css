@@ -248,38 +248,78 @@ body.player {
   align-items: center;
 }
 
-#touch-controller { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+.controller-options { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
+.controller-options h3 { margin: 0 0 16px; font-size: 16px; }
+.controller-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; font-size: 14px; }
+.controller-row select { width: 58%; min-width: 0; margin: 0; padding: 8px; font: inherit; background: var(--player-header); color: var(--player-text); }
+.controller-switch input { appearance: none; flex: 0 0 38px; width: 38px; height: 22px; margin: 0; padding: 2px; border: 1px solid var(--border); border-radius: 20px; background: transparent; cursor: pointer; }
+.controller-switch input::before { content: ''; display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--player-text); opacity: .7; }
+.controller-switch input:checked { background: var(--accent, #9ac0f3); }
+.controller-switch input:checked::before { transform: translateX(15px); background: #17202c; opacity: 1; }
+#controller-status, .controller-help { font-size: 12px; line-height: 1.5; opacity: .75; overflow-wrap: anywhere; }
+#controller-status { margin: 4px 0 12px; }
+.controller-help { margin: 0; padding: 0; border: 0; }
+.controller-help summary { cursor: pointer; font-size: 12px; font-weight: 500; }
+.controller-help p { margin: 10px 0; }
+
+#touch-controller { position: absolute; inset: 0; z-index: 20; pointer-events: none; --touch-edge: max(18px, env(safe-area-inset-left), env(safe-area-inset-right)); --touch-bottom: max(18px, env(safe-area-inset-bottom)); }
 #touch-controller[hidden] { display: none; }
-#touch-controller button, .touch-stick { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
-#touch-controller button { width: 44px; height: 44px; padding: 0; border-radius: 50%; background: #17202ccc; border: 1px solid #ffffff60; color: white; box-shadow: 0 2px 8px #0005; }
-#touch-controller button.pressed { background: #537bace6; transform: scale(.93); }
-.touch-stick { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: max(24px, env(safe-area-inset-left)); width: 112px; height: 112px; border-radius: 50%; background: #17202c66; border: 1px solid #ffffff60; display: grid; place-items: center; }
-.stick-knob { width: 48px; height: 48px; border-radius: 50%; background: #c5d5e199; border: 1px solid #ffffff80; }
-.touch-buttons, .touch-dpad { position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); right: max(20px, env(safe-area-inset-right)); display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 40px); gap: 2px; }
-.touch-buttons button:nth-child(1), .touch-dpad button:nth-child(1) { grid-column: 2; }
-.touch-buttons button:nth-child(2), .touch-dpad button:nth-child(2) { grid-column: 1; grid-row: 2; }
-.touch-buttons button:nth-child(3), .touch-dpad button:nth-child(3) { grid-column: 3; grid-row: 2; }
-.touch-buttons button:nth-child(4), .touch-dpad button:nth-child(4) { grid-column: 2; grid-row: 3; }
-.touch-dpad { left: 150px; right: auto; transform: scale(.72); transform-origin: bottom left; }
-.touch-shoulders { position: absolute; bottom: 164px; left: 24px; right: 24px; display: flex; justify-content: space-between; gap: 6px; }
-#touch-controller .touch-shoulders button { border-radius: 12px; width: 48px; height: 32px; font-size: 11px; }
-#controller-status { font-size: .85rem; overflow-wrap: anywhere; }
-@media (pointer: coarse) { .player-header { flex-wrap: wrap; gap: 6px; padding: 6px; } .player-actions { gap: 4px; } .player-actions button, .player-actions a { padding: 7px 9px; font-size: 12px; } }
-@media (max-width: 420px) { .touch-dpad { left: 130px; transform: scale(.6); } .touch-stick { width: 96px; height: 96px; left: 12px; } .touch-buttons { right: 8px; } }
-/* Console overlay: translucent controls keep the game visible beneath them. */
-#touch-controller button { background: #11182055; border-color: #ffffff45; box-shadow: none; color: #ffffffaa; }
-.touch-stick { background: none; border: 0; }
-.touch-shoulders { top: max(16px, env(safe-area-inset-top)); bottom: auto; display: grid; grid-template-columns: 52px 1fr 52px; grid-template-rows: 32px 32px; }
-.touch-shoulders button[data-button="6"] { grid-column: 1; grid-row: 1; }
-.touch-shoulders button[data-button="4"] { grid-column: 1; grid-row: 2; }
-.touch-shoulders button[data-button="7"] { grid-column: 3; grid-row: 1; }
-.touch-shoulders button[data-button="5"] { grid-column: 3; grid-row: 2; }
-.touch-shoulders button[data-button="8"], .touch-shoulders button[data-button="9"] { position: absolute; top: calc(100dvh - 164px); width: 52px; }
-.touch-shoulders button[data-button="8"] { left: calc(50% - 64px); }
-.touch-shoulders button[data-button="9"] { left: calc(50% + 12px); }
-#touch-controller .touch-buttons button { font-size: 30px; font-weight: 400; }
-#touch-controller button[data-button="3"] { color: #70d7b9b0; }
-#touch-controller button[data-button="2"] { color: #d7a4d4b0; }
-#touch-controller button[data-button="1"] { color: #eb8a9db0; }
-#touch-controller button[data-button="0"] { color: #86bfe9b0; }
-.touch-dpad button { border-radius: 5px !important; }
+#touch-controller button, .touch-stick { pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#touch-controller button { display: grid; place-items: center; margin: 0; padding: 0; width: 48px; height: 48px; min-height: 0; border: 1.5px solid #ffffff66; border-radius: 50%; background: #10182030; color: #ffffffc9; font-family: inherit; font-size: 14px; font-weight: 500; line-height: 1; box-shadow: 0 1px 3px #0003; }
+#touch-controller button.pressed { background: #ffffff38; border-color: #ffffffdf; }
+.touch-stick { position: absolute; width: 112px; height: 112px; bottom: var(--touch-bottom); }
+.touch-stick-left { left: var(--touch-edge); }
+.touch-stick-right { right: calc(var(--touch-edge) + 150px); }
+/* Override NippleJS inline fills: the outer ring and thumb must stay translucent. */
+#touch-controller .touch-stick .back { background: #ffffff0d !important; border: 1.5px solid #ffffff66; box-sizing: border-box; }
+#touch-controller .touch-stick .front { background: #ffffff29 !important; opacity: 1 !important; border: 1.5px solid #ffffffb0; box-sizing: border-box; box-shadow: 0 1px 4px #0003; }
+.touch-dpad, .touch-buttons { position: absolute; width: 132px; height: 132px; bottom: var(--touch-bottom); }
+.touch-dpad { left: calc(var(--touch-edge) + 140px); }
+.touch-buttons { right: var(--touch-edge); }
+#touch-controller .touch-dpad button, #touch-controller .touch-buttons button { position: absolute; }
+.touch-dpad button:nth-child(1), .touch-buttons button:nth-child(1) { left: 42px; top: 0; }
+.touch-dpad button:nth-child(2), .touch-buttons button:nth-child(2) { left: 0; top: 42px; }
+.touch-dpad button:nth-child(3), .touch-buttons button:nth-child(3) { right: 0; top: 42px; }
+.touch-dpad button:nth-child(4), .touch-buttons button:nth-child(4) { left: 42px; bottom: 0; }
+#touch-controller .touch-dpad button { width: 44px; height: 44px; border-radius: 12px; font-size: 20px; }
+#touch-controller .touch-buttons button { font-family: system-ui, sans-serif; font-size: 27px; font-weight: 400; }
+#touch-controller button[data-button="3"] { color: #8be0c8; }
+#touch-controller button[data-button="2"] { color: #e7b8de; }
+#touch-controller button[data-button="1"] { color: #f3a9b6; }
+#touch-controller button[data-button="0"] { color: #9cccf2; }
+.touch-shoulders { position: absolute; top: max(14px, env(safe-area-inset-top)); display: flex; gap: 12px; }
+.touch-shoulders-left { left: var(--touch-edge); }
+.touch-shoulders-right { right: var(--touch-edge); }
+#touch-controller .touch-shoulders button { width: 58px; height: 44px; border-radius: 14px; }
+.touch-system { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; gap: 14px; }
+#touch-controller .touch-system button { width: 52px; height: 44px; font-size: 11px; border-radius: 12px; }
+#touch-controller .touch-stick-click { position: absolute; width: 44px; height: 44px; bottom: calc(var(--touch-bottom) + 120px); font-size: 11px; border-radius: 12px; }
+.touch-stick-click-left { left: calc(var(--touch-edge) + 34px); }
+.touch-stick-click-right { right: calc(var(--touch-edge) + 184px); }
+@media (max-width: 650px) {
+  .touch-stick-right { right: var(--touch-edge); }
+  .touch-dpad { left: var(--touch-edge); bottom: calc(var(--touch-bottom) + 156px); }
+  .touch-buttons { bottom: calc(var(--touch-bottom) + 156px); }
+  .touch-stick-click-right { right: calc(var(--touch-edge) + 34px); }
+  .touch-system { top: auto; bottom: calc(var(--touch-bottom) + 38px); }
+}
+@media (max-width: 650px) and (max-height: 450px) {
+  #touch-controller { --touch-edge: 10px; --touch-bottom: 10px; }
+  .touch-stick { width: 100px; height: 100px; }
+  .touch-dpad { left: 120px; bottom: 10px; }
+  .touch-buttons { right: 10px; bottom: 10px; }
+  .touch-stick-right { right: 144px; }
+  .touch-stick-click-left { left: 38px; }
+  .touch-stick-click-right { right: 172px; }
+  #touch-controller .touch-stick-click { bottom: 116px; }
+  .touch-system { top: 16px; bottom: auto; }
+}
+@media (pointer: coarse) {
+  .player-header { flex-wrap: wrap; gap: 6px; padding: 6px; }
+  .player-actions { gap: 4px; }
+  .player-actions button, .player-actions a { padding: 7px 9px; font-size: 12px; }
+}
+
+.touch-dpad button:nth-child(1), .touch-dpad button:nth-child(4) { left: 44px; }
+.touch-dpad button:nth-child(2), .touch-dpad button:nth-child(3) { top: 44px; }
+@media (max-width: 359px) and (orientation: portrait) { .touch-system { bottom: calc(var(--touch-bottom) + 120px); } }

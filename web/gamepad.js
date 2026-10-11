@@ -33,17 +33,20 @@ window.GameDockController = (() => {
     };
     mobile.addEventListener('change', visibility);
     visibility();
-    const stick = overlay.querySelector('.touch-stick');
-    const joystick = nipplejs.create({
-      zone: stick, mode: 'static', position: {left: '50%', top: '50%'},
-      color: 'white', size: 100, restOpacity: .35, dynamicPage: true,
+    const joysticks = [...overlay.querySelectorAll('.touch-stick')].map(stick => {
+      const axis = Number(stick.dataset.axes);
+      const joystick = nipplejs.create({
+        zone: stick, mode: 'static', position: {left: '50%', top: '50%'},
+        color: 'white', size: 100, restOpacity: 1, dynamicPage: true,
+      });
+      joystick.on('move', event => {
+        const { x, y } = event.data.vector;
+        touch.axes[axis] = Math.abs(x) < .12 ? 0 : Math.max(-1, Math.min(1, x));
+        touch.axes[axis + 1] = Math.abs(y) < .12 ? 0 : Math.max(-1, Math.min(1, -y));
+      });
+      joystick.on('end', () => { touch.axes[axis] = touch.axes[axis + 1] = 0; });
+      return joystick;
     });
-    joystick.on('move', (event) => {
-      const data = event.data;
-      touch.axes[0] = Math.abs(data.vector.x) < .12 ? 0 : Math.max(-1, Math.min(1, data.vector.x));
-      touch.axes[1] = Math.abs(data.vector.y) < .12 ? 0 : Math.max(-1, Math.min(1, -data.vector.y));
-    });
-    joystick.on('end', () => { touch.axes[0] = touch.axes[1] = 0; });
     for (const button of overlay.querySelectorAll('[data-button]')) {
       const pointers = new Set();
       pointerResets.push(() => {
@@ -119,7 +122,7 @@ window.GameDockController = (() => {
       ], { type: 'application/json' }));
     });
     visibility();
-    return { dispose() { enabled = false; clear(); overlay.hidden = true; clearInterval(timer); dialogObserver.disconnect(); joystick.destroy(); send(touch, true); } };
+    return { dispose() { enabled = false; clear(); overlay.hidden = true; clearInterval(timer); dialogObserver.disconnect(); joysticks.forEach(joystick => joystick.destroy()); send(touch, true); } };
   }
   return { create };
 })();

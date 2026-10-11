@@ -1,10 +1,10 @@
 # Controllers
 
 New sessions on the updated runtime accept touch and browser Gamepad inputs.
-Settings → Control virtual selects Automático, Activado, or Desactivado.
+Settings → Touch controls selects Automatic on mobile, On, or Off.
 A separate USB/Bluetooth switch controls physical input; both preferences persist locally.
-Automatic shows the multitouch overlay on coarse-pointer devices. Left stick (vendored NippleJS 1.0.2, MIT),
-D-pad, console face buttons, shoulder/trigger buttons and Start/Select can be used simultaneously.
+Automatic shows the multitouch overlay on coarse-pointer devices. Dual sticks (vendored NippleJS 1.0.2, MIT),
+D-pad, console face buttons, shoulder/trigger buttons, L3/R3 and Start/Select can be used simultaneously.
 A standard USB/Bluetooth controller is polled while the session has focus. Pair
 it with the **client device**, press a button, then focus the game. The browser
 must support standard Gamepad mapping; use HTTPS (localhost also qualifies).

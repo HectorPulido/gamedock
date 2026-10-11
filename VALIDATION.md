@@ -197,3 +197,8 @@ A real authenticated portal forwarded input into a newly launched runtime.
 The actual Xpra viewer kept controller polling active after iframe load, and
 Settings hid/restored the touch overlay. Local portal/runtime/OpenTTD/GPU images
 were updated; the optional Linux evdev image was not built or hardware-tested.
+
+Touch layout revision: dual NippleJS sticks delivered axes 0–3 simultaneously
+with face buttons; release/cancellation passed. Captures reviewed at 844×390,
+667×375, 568×320, 390×844 and 320×568. All touch targets remained on-screen
+and at least 44×44 CSS pixels. Controller UI and documentation use English.
