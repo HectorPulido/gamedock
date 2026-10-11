@@ -484,3 +484,25 @@ input[type="color"] {
   flex-wrap: wrap;
   gap: 10px;
 }
+
+#library { padding-top: 28px; }
+#identity .library-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+}
+.library-refresh svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}

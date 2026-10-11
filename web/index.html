@@ -19,10 +19,14 @@
           >▦</span
         ><span id="brand" data-platform-name>GameDock</span></a
       >
-      <div id="identity"></div>
+      <div id="identity">
+        <button id="refresh" class="secondary library-refresh" aria-label="Refresh instances" title="Refresh instances" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M6.1 7a7 7 0 0 1 11.6-1L20 9M4 15l2.3 3A7 7 0 0 0 17.9 17" /></svg>
+        </button>
+      </div>
     </header>
     <main>
-      <section class="intro">
+      <section class="intro" hidden>
         <div>
           <p class="caption">Game library</p>
           <h1 id="headline">GameDock</h1>
@@ -76,11 +80,7 @@
           its own files.
         </p>
       </section>
-      <section id="library" hidden>
-        <div class="section-title">
-          <h2>Choose where to play</h2>
-          <button id="refresh" class="secondary">Refresh instances</button>
-        </div>
+      <section id="library" aria-label="Game library" hidden>
         <div id="games" class="games"></div>
         <h2>Your instances</h2>
         <div id="instances"></div>

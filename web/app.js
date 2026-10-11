@@ -45,7 +45,8 @@ $("#auth-form").onsubmit = (e) => {
 };
 $("#register").onclick = (e) =>
   action(() => authenticate("register"), e.target);
-$("#refresh").onclick = (e) => action(refresh, e.target);
+const refreshButton = $("#refresh");
+refreshButton.onclick = (e) => action(refresh, e.currentTarget);
 async function load() {
   state = await api("/catalog");
   document.title = state.settings.name;
@@ -57,6 +58,7 @@ async function load() {
   $(".desktop-art").hidden = !!state.settings.banner_image;
   if (state.settings.banner_image)
     $("#intro-banner").src = state.settings.banner_image;
+  $(".intro").hidden = !!state.user;
   $("#auth").hidden = !!state.user;
   $("#library").hidden = !state.user;
   $("#register").hidden = !state.settings.registration;
@@ -76,7 +78,8 @@ async function load() {
     admin.href = "/admin";
     $("#identity").append(admin);
   }
-  $("#identity").append(out);
+  refreshButton.hidden = false;
+  $("#identity").append(refreshButton, out);
   renderGames();
   await refresh();
 }
