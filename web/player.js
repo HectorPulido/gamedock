@@ -437,7 +437,9 @@ async function toggleFullscreen() {
 fullscreenButton.onclick = toggleFullscreen;
 document.addEventListener("fullscreenchange", () => {
   const active = !!document.fullscreenElement;
-  fullscreenButton.textContent = active ? "Exit fullscreen" : "Fullscreen";
+  const label = active ? "Exit fullscreen" : "Fullscreen";
+  fullscreenButton.setAttribute("aria-label", label);
+  fullscreenButton.title = label;
   fullscreenButton.setAttribute("aria-pressed", String(active));
   requestAnimationFrame(fit);
   returnFocus();

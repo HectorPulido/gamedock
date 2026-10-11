@@ -25,22 +25,25 @@
       >
       <nav id="session-tabs" aria-label="Running instances"></nav>
       <div class="player-actions">
-        <button id="fullscreen" class="secondary" aria-pressed="false">
-          Fullscreen
+        <button id="fullscreen" class="secondary icon-button" aria-pressed="false" aria-label="Fullscreen" title="Fullscreen">
+          <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" /></svg>
+          <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5" /></svg>
         </button>
         <button
           id="player-settings-toggle"
-          class="secondary"
+          class="secondary icon-button"
+          aria-label="Settings"
+          title="Settings"
           aria-haspopup="dialog"
           aria-controls="player-settings"
         >
-          Settings
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.5 2a8 8 0 0 0-2 1.2L4.5 6 2 10l1.5 1.4a8 8 0 0 0 0 2L2 15l2.5 4 2-.3a8 8 0 0 0 2 1.2L9 22h6l.5-2.1a8 8 0 0 0 2-1.2l2 .3 2.5-4-1.5-1.6a8 8 0 0 0 0-2L22 10l-2.5-4-2 .2a8 8 0 0 0-2-1.2L15 3Z" /><circle cx="12" cy="12.5" r="3" /></svg>
         </button>
-        <a class="button secondary" href="/" aria-label="Back to library"
-          >Back</a
-        >
-        <button id="stop-instance" class="danger" aria-label="Stop instance">
-          Stop
+        <a class="button secondary icon-button" href="/" aria-label="Back to library" title="Back to library">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18" /></svg>
+        </a>
+        <button id="stop-instance" class="danger icon-button" aria-label="Stop instance" title="Stop instance">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
         </button>
       </div>
     </header>

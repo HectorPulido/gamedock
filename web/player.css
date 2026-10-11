@@ -323,3 +323,26 @@ body.player {
 .touch-dpad button:nth-child(1), .touch-dpad button:nth-child(4) { left: 44px; }
 .touch-dpad button:nth-child(2), .touch-dpad button:nth-child(3) { top: 44px; }
 @media (max-width: 359px) and (orientation: portrait) { .touch-system { bottom: calc(var(--touch-bottom) + 120px); } }
+
+.player-actions .icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+}
+.icon-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+#fullscreen .icon-collapse,
+#fullscreen[aria-pressed="true"] .icon-expand { display: none; }
+#fullscreen[aria-pressed="true"] .icon-collapse { display: block; }
