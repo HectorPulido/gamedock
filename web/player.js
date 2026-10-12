@@ -58,6 +58,7 @@ function applyViewerSettings() {
   if (!["fsr", "smooth", "crisp"].includes(filterControl.value))
     filterControl.value = "fsr";
   viewer.filter(filterControl.value);
+  viewer.remotePointer(viewerSettings.remote_pointer_marker === true);
   document.querySelector("#diagnostics-toggle").hidden =
     viewerSettings.diagnostics_enabled === false;
   if (viewerSettings.diagnostics_enabled === false && !diagnostics.hidden)
@@ -154,6 +155,7 @@ frame.addEventListener("load", () => {
   if (stopped || !frame.getAttribute("src")) return;
   viewer.dispose();
   viewer.filter(filterControl.value);
+  viewer.remotePointer(viewerSettings.remote_pointer_marker === true);
   try {
     const doc = frame.contentDocument;
     // Xpra's own fullscreen resizes its viewport/canvas while the X display

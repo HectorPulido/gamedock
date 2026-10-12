@@ -146,6 +146,21 @@ window.GameDockViewer = (() => {
           if (ctx) ctx.imageSmoothingEnabled = mode !== "crisp";
       }
     }
+    function remotePointer(visible = false) {
+      const doc = frame.contentDocument;
+      if (!doc?.head) return;
+      let style = doc.querySelector("#gamedock-remote-pointer");
+      if (!style) {
+        style = doc.createElement("style");
+        style.id = "gamedock-remote-pointer";
+        doc.head.append(style);
+      }
+      // Keep the element for Xpra's packet handler. Its inline display updates
+      // cannot override this rule; the native cursor and input are untouched.
+      style.textContent = visible
+        ? ""
+        : "#shadow_pointer { display: none !important; visibility: hidden !important; }";
+    }
     function flatten(value, prefix = "", result = {}) {
       for (const [key, item] of Object.entries(value || {})) {
         const name = prefix ? prefix + "." + key : key;
@@ -232,7 +247,7 @@ window.GameDockViewer = (() => {
       client.send_info_request();
       return result;
     }
-    return { connect, focus, filter, sample, dispose };
+    return { connect, focus, filter, remotePointer, sample, dispose };
   }
   return { create };
 })();

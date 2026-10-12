@@ -32,6 +32,12 @@ def toggle(label, default, group, help=""):
 
 
 STREAMING_FIELDS = {
+    "remote_pointer_marker": toggle(
+        "Show remote pointer marker",
+        False,
+        "Viewer",
+        "Show Xpra's remote pointer position for collaborative observation. The native browser cursor and mouse input remain enabled.",
+    ),
     "viewer_scale": choice(
         "Default viewer size",
         "fit",
