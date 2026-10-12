@@ -317,6 +317,7 @@ function editGame(game) {
   f.memory_mb.value = game?.memory_mb ?? "";
   f.cpus.value = game?.cpus ?? "";
   fillGpu(game?.gpu || {});
+  fillNetwork(game || {});
   f.definition.value = JSON.stringify(
     game || {
       id: "my-game",
@@ -360,6 +361,7 @@ $("#profile").elements.definition.addEventListener("input", (e) => {
     $("#profile").elements.memory_mb.value = game.memory_mb ?? "";
     $("#profile").elements.cpus.value = game.cpus ?? "";
     fillGpu(game.gpu || {});
+    fillNetwork(game);
   } catch {}
 });
 $("#profile").elements.enabled.addEventListener("change", (event) => {
@@ -442,6 +444,8 @@ $("#profile").onsubmit = (e) => {
       game[key] = value === "" ? null : Number(value);
     }
     game.gpu = gpuFromForm(game.gpu);
+    game.network_policy = networkFromForm();
+    game.internet_access = game.network_policy.mode === "internet";
     game.enabled = e.target.elements.enabled.checked;
     await api("/admin/games", "PUT", game);
     profileEditing = false;
@@ -829,3 +833,32 @@ $("#streaming-settings").onsubmit = (event) => {
     message("Streaming settings saved. They apply to new instances.");
   }, event.submitter);
 };
+
+function fillNetwork(game) {
+  const f = $("#profile").elements;
+  const policy = game.network_policy || {mode: game.internet_access ? "internet" : "offline"};
+  f.network_mode.value = policy.mode || "offline";
+  f.network_allow.value = (policy.allow || []).map(r => `${r.cidr} ${r.port} ${r.protocol}`).join("\n");
+  f.network_deny.value = (policy.deny || []).join("\n");
+}
+function networkFromForm() {
+  const f = $("#profile").elements;
+  const lines = value => value.split(/\n/).map(s => s.trim()).filter(Boolean);
+  return {mode: f.network_mode.value, deny: lines(f.network_deny.value),
+    allow: lines(f.network_allow.value).map(line => {
+      const parts = line.split(/\s+/);
+      if (parts.length !== 3) throw new Error("Allowed services: use IP/CIDR port tcp|udp on each line.");
+      return {cidr: parts[0], port: Number(parts[1]), protocol: parts[2].toLowerCase()};
+    })};
+}
+for (const key of ["network_mode", "network_allow", "network_deny"]) {
+  $("#profile").elements[key].addEventListener("input", () => {
+    try {
+      const f = $("#profile").elements;
+      const game = JSON.parse(f.definition.value);
+      game.network_policy = networkFromForm();
+      game.internet_access = game.network_policy.mode === "internet";
+      f.definition.value = JSON.stringify(game, null, 2);
+    } catch {}
+  });
+}

@@ -184,6 +184,18 @@
                 Leave blank to inherit platform resources. Changes apply to new
                 instances.
               </p>
+              <fieldset class="network-settings">
+                <legend>Session network</legend>
+                <label>Network access<select name="network_mode">
+                  <option value="offline">No Internet</option>
+                  <option value="internet">Internet · block local networks</option>
+                  <option value="allowlist">Only approved destinations</option>
+                </select></label>
+                <label>Allowed services<textarea name="network_allow" rows="3" placeholder="192.168.0.7/32 5555 tcp"></textarea></label>
+                <p class="help">One IPv4 address or CIDR, port and protocol (tcp or udp) per line. Exceptions can allow a local game server. Ignored in No Internet mode.</p>
+                <label>Additional blocked networks<textarea name="network_deny" rows="2" placeholder="203.0.113.10/32"></textarea></label>
+                <p class="help">One IPv4 address or CIDR per line. Blocks override exceptions. IPv6 is blocked. Changes apply to newly launched instances; existing instances must be stopped and relaunched.</p>
+              </fieldset>
               <div class="appearance-grid">
                 <label
                   >Graphics acceleration<select name="gpu_vendor">

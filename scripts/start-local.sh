@@ -7,6 +7,7 @@ docker compose version >/dev/null
 if [[ ! -f .env ]]; then
     (umask 077; docker run --rm python:3.12-slim python -c 'import secrets; print("ADMIN_USER=admin\nADMIN_PASSWORD=" + secrets.token_urlsafe(24) + "\nPUBLIC_URL=http://localhost:8080\nBIND_ADDRESS=127.0.0.1\nPORT=8080")' > .env)
 fi
+docker build -t gamedock-network:local network
 docker build -t gamedock-runtime:local runtime
 docker build -t gamedock-openttd:local examples/openttd
 docker compose up -d --build --wait

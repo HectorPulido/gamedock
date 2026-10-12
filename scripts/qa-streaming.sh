@@ -18,6 +18,7 @@ PY
 qa_compose=(docker compose -p gamedock-bandwidth-qa --env-file "$qa_dir/qa.env" -f compose.yaml -f examples/https/compose.yaml)
 trap '"${qa_compose[@]}" down -v; rm -rf "$qa_dir"' EXIT
 "${qa_compose[@]}" down -v
+docker build -t gamedock-network:local network
 docker build -t gamedock-runtime:bandwidth-qa runtime
 docker run --rm --entrypoint python3 -v "$PWD/tests/test_xpra_bandwidth.py:/test.py:ro" gamedock-runtime:bandwidth-qa /test.py -v
 docker build -t gamedock-portal:local .

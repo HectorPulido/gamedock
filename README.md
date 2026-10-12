@@ -66,6 +66,7 @@ git clone git@github.com:HectorPulido/gamedock.git
 cd gamedock
 cp .env.example .env
 # Edit .env: ADMIN_PASSWORD must contain at least 12 characters.
+docker build -t gamedock-network:local network
 docker build -t gamedock-runtime:local runtime
 docker compose up -d --build
 ```
@@ -267,13 +268,34 @@ but still obey the platform's global and per-account concurrent limits.
 
 ### Session networks
 
-Game networks are internal by default: the portal can reach each desktop, but
-games cannot reach the Internet or sibling game networks. This also preserves
-isolation when using OrbStack for the local demo. For a game that needs downloads,
-authentication, or online multiplayer, set `internet_access: true` in its JSON profile. Use a native Linux Docker host
-for Internet-enabled games: OrbStack permits traffic between ordinary bridges,
-so separate non-internal networks alone do not provide sibling isolation there.
-Network changes apply to newly launched instances.
+Every new session runs behind a dedicated firewall container. The game shares
+its network namespace, but has no network administration capabilities. The
+firewall is applied before the game starts; missing images or firewall failures
+block the launch. Build it with `docker build -t gamedock-network:local network`.
+
+In Administration → Games → Session network, choose:
+
+- **No Internet**: internal network; only replies to incoming portal connections.
+- **Internet · block local networks**: public IPv4 access, with private, loopback,
+  link-local/metadata, shared-address, multicast and reserved destinations blocked.
+- **Only approved destinations**: only explicit IPv4 address/CIDR + port + TCP/UDP
+  exceptions, plus public DNS. Local game servers can be allowed explicitly.
+
+Allowed services are entered one per line, for example `192.168.0.7/32 5555 tcp`.
+Additional blocked networks override exceptions. Add any public-address LAN or
+host public IPs here too: the firewall cannot infer that a public destination is
+part of your private infrastructure. IPv6 egress is blocked to prevent bypass.
+DNS uses public Quad9 resolvers; DNS traffic remains allowed in online modes.
+Only the portal can open inbound desktop/controller connections (TCP 6084/6085).
+Games can answer those connections, but cannot open new connections to the portal. Separate namespaces prevent access to other sessions.
+Rules also protect local OrbStack sessions; they do not rely on bridge isolation.
+
+Existing `internet_access` values migrate to the matching mode when no
+`network_policy` exists. Changes affect new sessions only: **stop and relaunch
+existing instances** to apply isolation. No game container receives NET_ADMIN.
+The firewall container alone holds that capability in its own session namespace,
+without host networking or the Docker socket. This is network containment, not a
+VM security boundary against kernel/container escape vulnerabilities.
 
 ### Inactivity cleanup
 

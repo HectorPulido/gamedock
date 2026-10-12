@@ -12,6 +12,7 @@ if not p.exists():
 PY
 ./scripts/build-gpu.sh
 docker run --rm --entrypoint python3 -v "$PWD/tests/test_xpra_idle.py:/tmp/test_xpra_idle.py:ro" gamedock-runtime:local /tmp/test_xpra_idle.py -v
+docker build -t gamedock-network:local network
 docker build -t gamedock-portal:local .
 docker build -t gamedock-openttd:local examples/openttd
 docker build -f tests/Dockerfile.browser -t gamedock-browser-qa:local .

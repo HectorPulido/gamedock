@@ -16,6 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from network.policy import validate_policy, DNS
 from runtime.gpu import validate_gpu, docker_gpu
 from runtime.streaming import (
     STREAMING_DEFAULTS,
@@ -211,10 +212,13 @@ def validate_profile(data):
         or not 0 <= data.get("max_per_user", 1) <= 100
     ):
         raise ValueError("Game instance limit must be between 0 and 100")
+    network_policy = validate_policy(
+        data.get("network_policy"), data.get("internet_access", False)
+    )
     validate_resources(data, nullable=True)
     validate_streaming(data.get("streaming", {}))
     validate_gpu(data.get("gpu", {}))
-    return {
+    profile = {
         k: data.get(k, default)
         for k, default in [
             ("id", ""),
@@ -235,6 +239,8 @@ def validate_profile(data):
             ("gpu", {"vendor": "none"}),
         ]
     }
+    profile["network_policy"] = network_policy
+    return profile
 
 
 class Docker:
@@ -262,6 +268,10 @@ class Docker:
     async def start(self, sid, uid, profile, resolution):
         name = "gamedock-" + sid
         session_network = "gamedock-session-" + sid
+        gateway = "gamedock-gateway-" + sid
+        policy = validate_policy(
+            profile.get("network_policy"), profile.get("internet_access", False)
+        )
         volume = self.namespace + "-user-" + str(uid) + "-" + profile["id"]
         # Docker initializes a fresh named volume from /data, including ownership.
         definition = {
@@ -280,7 +290,7 @@ class Docker:
             },
             "HostConfig": {
                 "Init": True,
-                "NetworkMode": session_network,
+                "NetworkMode": "container:" + gateway,
                 "Memory": profile["memory_mb"] * 1024**2,
                 "NanoCpus": round(profile["cpus"] * 1_000_000_000),
                 "PidsLimit": 256,
@@ -288,7 +298,6 @@ class Docker:
                 "SecurityOpt": ["no-new-privileges:true"],
                 "Mounts": [{"Type": "volume", "Source": volume, "Target": "/data"}],
             },
-            "ExposedPorts": {"6084/tcp": {}},
         }
         # Explicit operator opt-in; never run sessions privileged.
         if os.environ.get("GAMEDOCK_UINPUT") == "1":
@@ -317,7 +326,7 @@ class Docker:
                     "Name": session_network,
                     "CheckDuplicate": True,
                     "Driver": "bridge",
-                    "Internal": not profile.get("internet_access", False),
+                    "Internal": policy["mode"] == "offline",
                     "Labels": {
                         "io.gamedock.managed": "true",
                         "io.gamedock.session": sid,
@@ -329,6 +338,64 @@ class Docker:
                 "/networks/" + session_network + "/connect",
                 {"Container": self.portal},
             )
+            attached = await self.request("GET", "/networks/" + session_network)
+            # Explicit service exceptions must never expose the privileged portal
+            # or Docker bridge host itself (including custom public-address pools).
+            protected = [
+                c["IPv4Address"].split("/")[0] + "/32"
+                for c in attached.get("Containers", {}).values()
+                if c.get("IPv4Address")
+            ]
+            protected += [
+                c["Gateway"] + "/32"
+                for c in attached.get("IPAM", {}).get("Config", [])
+                if c.get("Gateway")
+            ]
+            await self.request(
+                "POST",
+                "/containers/create?name=" + gateway,
+                {
+                    "Image": os.getenv(
+                        "GAMEDOCK_NETWORK_IMAGE", "gamedock-network:local"
+                    ),
+                    "Env": [
+                        "GAMEDOCK_NETWORK_POLICY=" + json.dumps(policy),
+                        "GAMEDOCK_NETWORK_PROTECTED=" + json.dumps(protected),
+                        "GAMEDOCK_NETWORK_PORTAL_IP="
+                        + (protected[0].split("/")[0] if protected else ""),
+                    ],
+                    "Labels": {
+                        "io.gamedock.managed": "true",
+                        "io.gamedock.session": sid,
+                        "io.gamedock.portal-ip": protected[0].split("/")[0]
+                        if protected
+                        else "",
+                    },
+                    "HostConfig": {
+                        "NetworkMode": session_network,
+                        "CapDrop": ["ALL"],
+                        "CapAdd": ["NET_ADMIN"],
+                        "SecurityOpt": ["no-new-privileges:true"],
+                        "Dns": list(DNS),
+                        "Memory": 64 * 1024**2,
+                        "PidsLimit": 32,
+                        "ReadonlyRootfs": True,
+                        "Tmpfs": {"/tmp": "rw,noexec,nosuid,size=1m"},
+                    },
+                },
+            )
+            await self.request("POST", "/containers/" + gateway + "/start")
+            for _ in range(100):
+                guard = await self.request("GET", "/containers/" + gateway + "/json")
+                if not guard.get("State", {}).get("Running"):
+                    raise RuntimeError(
+                        "Session network firewall failed; launch blocked"
+                    )
+                if guard["State"].get("Health", {}).get("Status") == "healthy":
+                    break
+                await asyncio.sleep(0.1)
+            else:
+                raise RuntimeError("Session network firewall not ready; launch blocked")
             await self.request("POST", "/containers/create?name=" + name, definition)
             await self.request("POST", "/containers/" + name + "/start")
         except Exception:
@@ -336,26 +403,56 @@ class Docker:
             raise
 
     async def inspect(self, sid):
-        return await self.request(
+        info = await self.request(
             "GET", "/containers/gamedock-" + sid + "/json", missing=True
         )
+        if info and info.get("HostConfig", {}).get("NetworkMode", "").startswith(
+            "container:"
+        ):
+            gateway = await self.request(
+                "GET", "/containers/gamedock-gateway-" + sid + "/json", missing=True
+            )
+            if not gateway or not gateway["State"]["Running"]:
+                # Never continue a game with a missing firewall owner.
+                await self.stop(sid)
+                return None
+            info["NetworkSettings"]["Networks"] = gateway["NetworkSettings"]["Networks"]
+        return info
 
     async def ensure_connection(self, sid):
         async with self.connection_lock:
             network = "gamedock-session-" + sid
             info = await self.request("GET", "/networks/" + network)
             if not any(
-                cid.startswith(self.portal) for cid in info.get("Containers", {})
+                c.get("Name") == self.portal or cid.startswith(self.portal)
+                for cid, c in info.get("Containers", {}).items()
             ):
+                endpoint = {"Container": self.portal}
+                gateway = await self.request(
+                    "GET", "/containers/gamedock-gateway-" + sid + "/json", missing=True
+                )
+                if gateway:
+                    portal_ip = (
+                        gateway.get("Config", {})
+                        .get("Labels", {})
+                        .get("io.gamedock.portal-ip")
+                    )
+                    if portal_ip:
+                        endpoint["EndpointConfig"] = {
+                            "IPAMConfig": {"IPv4Address": portal_ip}
+                        }
                 await self.request(
-                    "POST",
-                    "/networks/" + network + "/connect",
-                    {"Container": self.portal},
+                    "POST", "/networks/" + network + "/connect", endpoint
                 )
 
     async def stop(self, sid):
         await self.request(
             "DELETE", "/containers/gamedock-" + sid + "?force=true", missing=True
+        )
+        await self.request(
+            "DELETE",
+            "/containers/gamedock-gateway-" + sid + "?force=true",
+            missing=True,
         )
         network = "gamedock-session-" + sid
         info = await self.request("GET", "/networks/" + network, missing=True)
@@ -1290,8 +1387,10 @@ def create_app(db_path=None, docker=None):
     CREATE TABLE IF NOT EXISTS games(id TEXT PRIMARY KEY,definition TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS instances(id TEXT PRIMARY KEY,uid INTEGER NOT NULL,game TEXT NOT NULL,resolution TEXT NOT NULL,status TEXT NOT NULL,created REAL NOT NULL);"""
     )
-    db.executescript("""CREATE TABLE IF NOT EXISTS user_policies(uid INTEGER PRIMARY KEY,definition TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY,digest TEXT UNIQUE NOT NULL,label TEXT NOT NULL,max_uses INTEGER NOT NULL,uses INTEGER NOT NULL DEFAULT 0,expires REAL,revoked INTEGER NOT NULL DEFAULT 0);""")
+    db.executescript(
+        """CREATE TABLE IF NOT EXISTS user_policies(uid INTEGER PRIMARY KEY,definition TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY,digest TEXT UNIQUE NOT NULL,label TEXT NOT NULL,max_uses INTEGER NOT NULL,uses INTEGER NOT NULL DEFAULT 0,expires REAL,revoked INTEGER NOT NULL DEFAULT 0);"""
+    )
     if "last_activity" not in {
         row[1] for row in db.execute("PRAGMA table_info(instances)")
     }:

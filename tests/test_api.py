@@ -150,6 +150,40 @@ class API(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             validate_profile(profile)
 
+    async def test_network_policy_permissions_and_launch_inheritance(self):
+        admin = await self.login("admin", "login")
+        alice = await self.login()
+        profile = {
+            "id": "nettest",
+            "name": "Network test",
+            "image": "runtime:local",
+            "command": ["xterm"],
+            "network_policy": {
+                "mode": "allowlist",
+                "allow": [{"cidr": "192.168.0.7/32", "port": 5555, "protocol": "tcp"}],
+            },
+        }
+        response = await self.client.put(
+            "/api/admin/games", headers=alice, json=profile
+        )
+        self.assertEqual(response.status, 403)
+        response = await self.client.put(
+            "/api/admin/games", headers=admin, json=profile
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        response = await self.client.post(
+            "/api/instances", headers=admin, json={"game": "nettest"}
+        )
+        self.assertEqual(response.status, 201, await response.text())
+        policy = self.docker.profiles[(await response.json())["id"]]["network_policy"]
+        self.assertEqual(policy["mode"], "allowlist")
+        self.assertEqual(policy["allow"], profile["network_policy"]["allow"])
+        profile["network_policy"]["allow"][0]["port"] = 0
+        response = await self.client.put(
+            "/api/admin/games", headers=admin, json=profile
+        )
+        self.assertEqual(response.status, 400)
+
     async def test_coherent_versioned_assets_and_cache_policy(self):
         response = await self.client.get("/")
         document = await response.text()
@@ -556,7 +590,13 @@ class API(unittest.IsolatedAsyncioTestCase):
 
     async def test_docker_resource_payload(self):
         docker = Docker()
-        docker.request = AsyncMock(return_value={})
+
+        async def response(method, path, *args, **kwargs):
+            if path.endswith("/json"):
+                return {"State": {"Running": True, "Health": {"Status": "healthy"}}}
+            return {}
+
+        docker.request = AsyncMock(side_effect=response)
         await docker.start(
             "test",
             2,
@@ -573,13 +613,23 @@ class API(unittest.IsolatedAsyncioTestCase):
         call = next(
             c
             for c in docker.request.call_args_list
-            if "/containers/create" in c.args[1]
+            if "/containers/create?name=gamedock-test" == c.args[1]
         )
         host = call.args[2]["HostConfig"]
         self.assertEqual(host["Memory"], 1536 * 1024**2)
         self.assertEqual(host["NanoCpus"], 750000000)
         self.assertEqual(host["CapDrop"], ["ALL"])
         self.assertNotIn("PortBindings", host)
+        self.assertEqual(host["NetworkMode"], "container:gamedock-gateway-test")
+        self.assertNotIn("NET_ADMIN", host.get("CapAdd", []))
+        guard = next(
+            c.args[2]
+            for c in docker.request.call_args_list
+            if c.args[1] == "/containers/create?name=gamedock-gateway-test"
+        )
+        self.assertEqual(guard["HostConfig"]["CapAdd"], ["NET_ADMIN"])
+        self.assertTrue(guard["HostConfig"]["ReadonlyRootfs"])
+        self.assertNotIn("Mounts", guard["HostConfig"])
 
     async def test_brand_appearance_validation_and_public_pages(self):
         admin = await self.login("admin", "login")

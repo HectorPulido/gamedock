@@ -181,9 +181,16 @@ with tempfile.TemporaryDirectory() as directory:
             assert info["Mounts"][0]["Name"].startswith(
                 os.getenv("QA_PROJECT", "gamedock-qa") + "-user-"
             ), "Volume is not scoped to the QA deployment"
-            assert list(info["NetworkSettings"]["Networks"]) == [
+            assert info["HostConfig"]["NetworkMode"].startswith("container:")
+            gateway = json.loads(
+                subprocess.check_output(
+                    ["docker", "inspect", "gamedock-gateway-" + sid]
+                )
+            )[0]
+            assert list(gateway["NetworkSettings"]["Networks"]) == [
                 "gamedock-session-" + sid
             ]
+            assert gateway["State"]["Health"]["Status"] == "healthy"
             net = json.loads(
                 subprocess.check_output(
                     ["docker", "network", "inspect", "gamedock-session-" + sid]
@@ -193,7 +200,12 @@ with tempfile.TemporaryDirectory() as directory:
         peer = json.loads(
             subprocess.check_output(["docker", "inspect", "gamedock-" + ids[1]])
         )[0]
-        peer_ip = next(iter(peer["NetworkSettings"]["Networks"].values()))["IPAddress"]
+        gateway = json.loads(
+            subprocess.check_output(["docker", "inspect", "gamedock-gateway-" + ids[1]])
+        )[0]
+        peer_ip = next(iter(gateway["NetworkSettings"]["Networks"].values()))[
+            "IPAddress"
+        ]
         attempt = subprocess.run(
             [
                 "docker",
@@ -241,9 +253,9 @@ with tempfile.TemporaryDirectory() as directory:
             peer_now = json.loads(
                 subprocess.check_output(["docker", "inspect", "gamedock-" + ids[1]])
             )[0]
-            assert peer_now["State"]["Pid"] == pid, (
-                "Portal recreation restarted the game"
-            )
+            assert (
+                peer_now["State"]["Pid"] == pid
+            ), "Portal recreation restarted the game"
             req = urllib.request.Request(
                 URL + "/desktop/" + ids[1] + "/",
                 headers={"Authorization": "Bearer " + token},
@@ -279,9 +291,9 @@ with tempfile.TemporaryDirectory() as directory:
             ],
             text=True,
         )
-        assert retained.strip() == "retained", (
-            "Game files lost after replacing instance"
-        )
+        assert (
+            retained.strip() == "retained"
+        ), "Game files lost after replacing instance"
         print(
             "PASS: CLI registration, native command, two desktops, two actual resolutions, persistent data, Xpra HTTP, cross-user denial, no published session ports"
         )

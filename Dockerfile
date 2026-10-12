@@ -3,6 +3,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY server server
+COPY network/policy.py network/
 COPY runtime/streaming.py runtime/gpu.py runtime/gamepad.py runtime/
 COPY web web
 EXPOSE 8080

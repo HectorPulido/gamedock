@@ -134,12 +134,18 @@ class DockerGPU(unittest.IsolatedAsyncioTestCase):
             )
             profile.update(memory_mb=1024, cpus=1)
             docker = Docker()
-            docker.request = AsyncMock(return_value={})
+
+            async def response(method, path, *args, **kwargs):
+                if path.endswith("/json"):
+                    return {"State": {"Running": True, "Health": {"Status": "healthy"}}}
+                return {}
+
+            docker.request = AsyncMock(side_effect=response)
             await docker.start("test", 1, profile, "1280x720")
             payload = next(
                 c.args[2]
                 for c in docker.request.call_args_list
-                if "/containers/create" in c.args[1]
+                if "/containers/create?name=gamedock-test" == c.args[1]
             )
             self.assertEqual(payload["HostConfig"]["CapDrop"], ["ALL"])
             self.assertNotIn("Privileged", payload["HostConfig"])
