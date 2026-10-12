@@ -6,6 +6,8 @@ COPY patch-xpra-bandwidth.py /tmp/patch-xpra-bandwidth.py
 RUN python3 /tmp/patch-xpra-bandwidth.py && rm /tmp/patch-xpra-bandwidth.py
 COPY patch-xpra-idle.py /tmp/patch-xpra-idle.py
 RUN python3 /tmp/patch-xpra-idle.py && rm /tmp/patch-xpra-idle.py
+COPY patch-xpra-visibility.py /tmp/patch-xpra-visibility.py
+RUN python3 /tmp/patch-xpra-visibility.py && rm /tmp/patch-xpra-visibility.py
 COPY gamedock_metrics.py patch-xpra-metrics.py /tmp/
 RUN python3 /tmp/patch-xpra-metrics.py && rm /tmp/patch-xpra-metrics.py /tmp/gamedock_metrics.py
 COPY gamepad.py streaming.py gpu.py /usr/local/bin/

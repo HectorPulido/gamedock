@@ -1,0 +1,13 @@
+# Headed visibility QA must allow Chromium to report real background tabs.
+ARG BASE_IMAGE=gamedock-browser-qa:local
+FROM ${BASE_IMAGE}
+RUN apt-get update && apt-get install -y --no-install-recommends openbox xvfb && rm -rf /var/lib/apt/lists/*
+RUN python - <<'PY'
+from pathlib import Path
+import playwright
+p=Path(playwright.__file__).parent/'driver/package/lib/server/chromium/crPage.js'
+s=p.read_text()
+old='"Emulation.setFocusEmulationEnabled", { enabled: true }'
+assert s.count(old)==1, 'Playwright visibility fixture needs review'
+p.write_text(s.replace(old,'"Emulation.setFocusEmulationEnabled", { enabled: false }'))
+PY

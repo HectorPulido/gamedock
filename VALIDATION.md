@@ -202,3 +202,47 @@ Touch layout revision: dual NippleJS sticks delivered axes 0–3 simultaneously
 with face buttons; release/cancellation passed. Captures reviewed at 844×390,
 667×375, 568×320, 390×844 and 320×568. All touch targets remained on-screen
 and at least 44×44 CSS pixels. Controller UI and documentation use English.
+
+Visibility recovery and 20 Hz comparison (2026-10-12):
+
+- The runtime now clears stale `iconic` state on an explicit map, and the HTML5
+  client announces `iconified=false` before its resume refresh. The actual
+  `unlock_batch_delay()` retains its guard for hidden windows and bounds a
+  restored saved delay to the configured maximum. The existing `idle_fix`
+  setting still controls the server-side recovery patches.
+- Five tests executed against installed Xpra 6.5 cover active-client input,
+  stale iconic state, saved delays beyond the configured maximum, repeated
+  unmap/map cycles, and preservation of the hidden-window batch lock.
+- Headed distribution Chromium, Xvfb and Openbox alternated real tabs four times
+  per profile. `document.hidden` changed naturally; no visibility events or
+  DOM properties were synthesized. While hidden, the window batch was locked;
+  after returning and pressing ArrowRight/moving the pointer it was unlocked,
+  with reported last delay 0 ms <= configured maximum 40 ms, on every cycle.
+- This measures the local Mac/OrbStack software-rendered **glxgears** workload at
+  1280x720, OpenH264/libyuv, fixed quality 50, minimum quality 30, adaptive
+  bandwidth detection enabled. Each final foreground sample lasted about
+  16 seconds. Values are run-to-run observations, not a Dofus benchmark:
+
+  | Budget | Capture FPS | Delivered FPS | Decoded FPS | Image Mbps | Decode errors |
+  | --- | ---: | ---: | ---: | ---: | ---: |
+  | 4 Mbps | 19.00 | 19.45 | 19.45 | 2.198 | 0 |
+  | 6 Mbps | 19.50 | 19.84 | 19.84 | 2.233 | 0 |
+
+- A useful starting profile is 20 Hz, quality 50 and 4–6 Mbps, retaining H.264
+  with WebP/JPEG fallbacks. This fixture fit within 4 Mbps; 6 Mbps gives more
+  headroom for complex scenes. The small FPS difference does not establish
+  that the higher budget caused an improvement. No defaults were changed.
+  External clients, actual character movement/textures in Wine/Dofus, GPU
+  encoding and hostile-network latency remain to be validated on the target
+  host; no remote Dofus container was changed.
+- `tests/visibility_browser.py` reproduces real-tab recovery and captures draw
+  payload bytes plus successful decoder acknowledgements. Use a disposable
+  animated runtime exposed through HTTPS as `QA_XPRA_URL`, with matching
+  `QA_BANDWIDTH_MBPS`. Build `tests/Dockerfile.visibility-browser` on the QA
+  browser image and run headed under Xvfb/Openbox. The fixture disables
+  Playwright's internal focus emulation, which otherwise falsely keeps all
+  tabs visible. It does not alter the application or Chromium's visibility API.
+  Raw local observations: `/tmp/gamedock-streaming-artifacts/visibility-4mbps.json`
+  and `visibility-6mbps.json`; the recovered canvas screenshot is in that folder.
+- Local runtime, OpenTTD and NVIDIA/AMD/Intel images include the patch for new
+  sessions. Existing user sessions were not restarted.
