@@ -55,8 +55,11 @@ and game profiles.
 
 ### Manual setup
 
-Requirements: a Linux server with Docker Engine 26+ and Docker Compose. Tested on
+Requirements: a Linux server with Docker Engine 28+ and Docker Compose 2.33.1+. Tested on
 x86_64. Serving the platform does not require Wine or Python on the host.
+
+The portal's main network uses `gw_priority: 100` to preserve its default route
+when Internet-enabled session networks are attached or removed.
 
 ```sh
 git clone git@github.com:HectorPulido/gamedock.git
