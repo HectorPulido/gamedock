@@ -15,6 +15,17 @@ except ImportError:
 
 @unittest.skipUnless(IdleConnection, "Requires Xpra; run inside gamedock-runtime")
 class IdleRecovery(unittest.TestCase):
+    def test_refresh_batching_can_be_independent(self):
+        from xpra.server.window.batch_config import DamageBatchConfig
+        for enabled, expected in (("1", 33), ("0", 5)):
+            with patch.dict(os.environ, {"GAMEDOCK_BATCH_MATCH_REFRESH": enabled}):
+                batch = DamageBatchConfig()
+                batch.min_delay = 5
+                batch.match_vrefresh(30)
+                self.assertEqual(batch.min_delay, expected)
+                batch.match_vrefresh(20)
+                self.assertEqual(batch.min_delay, 50 if enabled == "1" else 5)
+
     def test_input_reconciles_a_window_even_when_connection_is_active(self):
         for enabled in ("1", "0"):
             with (

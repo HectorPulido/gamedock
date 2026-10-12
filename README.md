@@ -491,3 +491,11 @@ For HTTPS / browser H.264 decoding, effective bandwidth budgets and Wine process
 accounting, see [streaming deployment notes](examples/https/README.md).
 
 Controllers: [mobile touch overlay and USB/Bluetooth setup](examples/controllers/README.md).
+
+Batching and capture rate can be configured separately in Administration → Streaming.
+`batch_match_refresh` defaults to `true` (recommended): at 30 Hz, a configured
+5 ms minimum becomes an effective 33 ms minimum. Disable **Match batching to
+capture rate** to keep `batch_min_delay` independent; the capture target and
+GStreamer frame rate still follow `refresh_rate`. A smaller queue is not always
+faster: it can increase CPU, encoding work and traffic. Changes apply to new
+sessions and require runtime images containing the batching patch.

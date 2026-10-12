@@ -149,6 +149,13 @@ STREAMING_FIELDS = {
     "idle_fix": toggle(
         "Restore low latency after inactivity", True, "Capture and latency"
     ),
+    "batch_match_refresh": toggle(
+        "Match batching to capture rate",
+        True,
+        "Capture and latency",
+        "Recommended. Raises the effective minimum queue to one capture interval. "
+        "Disable to use an independent minimum; lower delays may increase CPU and traffic.",
+    ),
     "batch_min_delay": number(
         "Minimum frame queue (ms)", 5, 0, 1000, "Capture and latency"
     ),
@@ -269,6 +276,8 @@ def runtime_options(settings):
             "XPRA_SHADOW_XSHM": str(int(cfg["xshm"])),
             "XPRA_XSHM": str(int(cfg["xshm"])),
             "GAMEDOCK_IDLE_FIX": str(int(cfg["idle_fix"])),
+            "GAMEDOCK_BATCH_MATCH_REFRESH": str(int(cfg["batch_match_refresh"])),
+            "GAMEDOCK_CAPTURE_HZ": str(cfg["refresh_rate"]),
             "XPRA_SOCKET_NODELAY": str(int(cfg["socket_nodelay"])),
             "XPRA_SOCKET_CORK": str(int(cfg["socket_cork"])),
         }

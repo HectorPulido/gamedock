@@ -33,6 +33,14 @@ class Streaming(unittest.TestCase):
         self.assertEqual(env["GAMEDOCK_IDLE_FIX"], "0")
         self.assertEqual(env["XPRA_SOCKET_CORK"], "1")
 
+    def test_independent_batching_keeps_capture_target(self):
+        args, env = runtime_options({"batch_match_refresh": False, "refresh_rate": 30})
+        self.assertIn("--refresh-rate=30", args)
+        self.assertEqual(env["GAMEDOCK_BATCH_MATCH_REFRESH"], "0")
+        self.assertEqual(env["GAMEDOCK_CAPTURE_HZ"], "30")
+        self.assertEqual(env["XPRA_BATCH_MIN_DELAY"], "5")
+        self.assertEqual(runtime_options({})[1]["GAMEDOCK_BATCH_MATCH_REFRESH"], "1")
+
     def test_invalid_values_and_conflicting_options(self):
         for value in (
             None,
