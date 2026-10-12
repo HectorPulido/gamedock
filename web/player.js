@@ -8,6 +8,9 @@ const controller = GameDockController.create(frame, sid);
 const scaleControl = document.querySelector("#viewer-scale");
 const filterControl = document.querySelector("#canvas-filter");
 const diagnostics = document.querySelector("#streaming-diagnostics");
+frame.addEventListener("fsr-status", (event) => {
+  document.querySelector("#scaler-status").textContent = event.detail.reason;
+});
 let diagnosticTimer;
 let viewerSettings = {};
 function preference(key) {
@@ -49,11 +52,11 @@ function applyViewerSettings() {
   scaleControl.value =
     preference("viewer-scale") || viewerSettings.viewer_scale || "fit";
   filterControl.value =
-    preference("canvas-filter") || viewerSettings.canvas_filter || "smooth";
+    preference("canvas-filter") || viewerSettings.canvas_filter || "fsr";
   if (!["fit", "original", "integer"].includes(scaleControl.value))
     scaleControl.value = "fit";
-  if (!["smooth", "crisp"].includes(filterControl.value))
-    filterControl.value = "smooth";
+  if (!["fsr", "smooth", "crisp"].includes(filterControl.value))
+    filterControl.value = "fsr";
   viewer.filter(filterControl.value);
   document.querySelector("#diagnostics-toggle").hidden =
     viewerSettings.diagnostics_enabled === false;
@@ -336,6 +339,9 @@ const metrics = [
   ["decode_errors", "Decode errors", ""],
   ["geometry", "Source → displayed", ""],
   ["canvas", "Canvas backing size", ""],
+  ["scaler_mode", "Browser scaler", ""],
+  ["scaler_submit", "Scaler CPU submission (not GPU time)", "ms"],
+  ["scaler_output", "Client-only scaler output", ""],
 ];
 const values = document.querySelector("#diagnostics-values");
 for (const [key, label] of metrics) {
@@ -349,6 +355,9 @@ for (const [key, label] of metrics) {
 function sampleDiagnostics() {
   if (diagnostics.hidden || stopped || document.hidden) return;
   const sample = viewer.sample();
+  sample.scaler_mode = sample.scaler?.reason || sample.scaler?.mode;
+  sample.scaler_submit = sample.scaler?.submit_ms;
+  sample.scaler_output = sample.scaler?.output;
   if (sample.gpu_vendor === "none") sample.gpu_vendor = "CPU / software";
   sample.hourly_gb =
     sample.image_mbps == null ? null : (sample.image_mbps * 3600) / 8 / 1000;

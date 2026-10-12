@@ -33,6 +33,15 @@ class Streaming(unittest.TestCase):
         self.assertEqual(env["GAMEDOCK_IDLE_FIX"], "0")
         self.assertEqual(env["XPRA_SOCKET_CORK"], "1")
 
+    def test_fsr_is_client_only_and_preserves_legacy_filters(self):
+        self.assertEqual(STREAMING_DEFAULTS["canvas_filter"], "fsr")
+        baseline = runtime_options({"canvas_filter": "smooth"})
+        for mode in ("fsr", "crisp", "smooth"):
+            self.assertEqual(runtime_options({"canvas_filter": mode}), baseline)
+            self.assertEqual(
+                validate_streaming({"canvas_filter": mode})["canvas_filter"], mode
+            )
+
     def test_independent_batching_keeps_capture_target(self):
         args, env = runtime_options({"batch_match_refresh": False, "refresh_rate": 30})
         self.assertIn("--refresh-rate=30", args)

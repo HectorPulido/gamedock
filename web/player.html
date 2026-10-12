@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="/assets/notifications.css" />
     <script src="/assets/theme.js" defer></script>
     <script src="/assets/notifications.js" defer></script>
+    <script src="/assets/fsr1-shaders.js" defer></script>
+    <script src="/assets/fsr.js" defer></script>
     <script src="/assets/viewer-tools.js" defer></script>
     <script src="/assets/nipplejs.js" defer></script>
     <script src="/assets/gamepad.js" defer></script>
@@ -25,9 +27,19 @@
       >
       <nav id="session-tabs" aria-label="Running instances"></nav>
       <div class="player-actions">
-        <button id="fullscreen" class="secondary icon-button" aria-pressed="false" aria-label="Fullscreen" title="Fullscreen">
-          <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" /></svg>
-          <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5" /></svg>
+        <button
+          id="fullscreen"
+          class="secondary icon-button"
+          aria-pressed="false"
+          aria-label="Fullscreen"
+          title="Fullscreen"
+        >
+          <svg class="icon-expand" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5" />
+          </svg>
+          <svg class="icon-collapse" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 8h5V3m8 0v5h5M8 21v-5H3m18 0h-5v5" />
+          </svg>
         </button>
         <button
           id="player-settings-toggle"
@@ -37,13 +49,40 @@
           aria-haspopup="dialog"
           aria-controls="player-settings"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3-.5 2a8 8 0 0 0-2 1.2L4.5 6 2 10l1.5 1.4a8 8 0 0 0 0 2L2 15l2.5 4 2-.3a8 8 0 0 0 2 1.2L9 22h6l.5-2.1a8 8 0 0 0 2-1.2l2 .3 2.5-4-1.5-1.6a8 8 0 0 0 0-2L22 10l-2.5-4-2 .2a8 8 0 0 0-2-1.2L15 3Z" /><circle cx="12" cy="12.5" r="3" /></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="m9 3-.5 2a8 8 0 0 0-2 1.2L4.5 6 2 10l1.5 1.4a8 8 0 0 0 0 2L2 15l2.5 4 2-.3a8 8 0 0 0 2 1.2L9 22h6l.5-2.1a8 8 0 0 0 2-1.2l2 .3 2.5-4-1.5-1.6a8 8 0 0 0 0-2L22 10l-2.5-4-2 .2a8 8 0 0 0-2-1.2L15 3Z"
+            />
+            <circle cx="12" cy="12.5" r="3" />
+          </svg>
         </button>
-        <a class="button secondary icon-button" href="/" aria-label="Back to library" title="Back to library">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 5-7 7 7 7M3 12h18" /></svg>
+        <a
+          class="button secondary icon-button"
+          href="/"
+          aria-label="Back to library"
+          title="Back to library"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m10 5-7 7 7 7M3 12h18" />
+          </svg>
         </a>
-        <button id="stop-instance" class="danger icon-button" aria-label="Stop instance" title="Stop instance">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none" /></svg>
+        <button
+          id="stop-instance"
+          class="danger icon-button"
+          aria-label="Stop instance"
+          title="Stop instance"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect
+              x="6"
+              y="6"
+              width="12"
+              height="12"
+              rx="2"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
         </button>
       </div>
     </header>
@@ -71,6 +110,7 @@
         >
         <label class="viewer-scale"
           >Pixels<select id="canvas-filter" aria-label="Canvas filter">
+            <option value="fsr">FSR 1 · EASU + RCAS</option>
             <option value="smooth">Smooth</option>
             <option value="crisp">Crisp</option>
           </select></label
@@ -85,22 +125,48 @@
           Diagnostics
         </button>
       </div>
-      <section class="controller-options" aria-labelledby="controller-options-title">
+      <p class="settings-description" id="scaler-status">
+        FSR 1 enlarges decoded frames on your device. Unsupported browsers use
+        Smooth. It does not increase game or stream resolution.
+      </p>
+      <section
+        class="controller-options"
+        aria-labelledby="controller-options-title"
+      >
         <h3 id="controller-options-title">Controllers</h3>
-        <label class="controller-row" for="controller-mode"><span>Touch controls</span>
+        <label class="controller-row" for="controller-mode"
+          ><span>Touch controls</span>
           <select id="controller-mode">
             <option value="auto">Automatic on mobile</option>
             <option value="touch">On</option>
             <option value="off">Off</option>
           </select>
         </label>
-        <label class="controller-row controller-switch" for="physical-controller">
-          <span>USB / Bluetooth controller</span><input type="checkbox" id="physical-controller" checked role="switch" />
+        <label
+          class="controller-row controller-switch"
+          for="physical-controller"
+        >
+          <span>USB / Bluetooth controller</span
+          ><input
+            type="checkbox"
+            id="physical-controller"
+            checked
+            role="switch"
+          />
         </label>
-        <p id="controller-status" role="status">Connect a controller and press a button.</p>
-        <details class="controller-help"><summary>Controls and compatibility</summary>
-          <p>Pair physical controllers with this device. Use HTTPS or localhost.</p>
-          <p>Keyboard mode: left stick WASD; right stick and D-pad arrows. × Space, ○ Escape, □ E, △ Q; L1/R1 Shift/Ctrl; L2/R2 Z/C; Select Tab, Start Enter; L3/R3 R/F. Configure these keys in your game.</p>
+        <p id="controller-status" role="status">
+          Connect a controller and press a button.
+        </p>
+        <details class="controller-help">
+          <summary>Controls and compatibility</summary>
+          <p>
+            Pair physical controllers with this device. Use HTTPS or localhost.
+          </p>
+          <p>
+            Keyboard mode: left stick WASD; right stick and D-pad arrows. ×
+            Space, ○ Escape, □ E, △ Q; L1/R1 Shift/Ctrl; L2/R2 Z/C; Select Tab,
+            Start Enter; L3/R3 R/F. Configure these keys in your game.
+          </p>
         </details>
       </section>
       <div class="session-options">
@@ -150,15 +216,54 @@
         allowfullscreen
       ></iframe>
       <div id="touch-controller" aria-label="Touch controller" hidden>
-        <div class="touch-shoulders touch-shoulders-left"><button data-button="6" aria-label="Left trigger">L2</button><button data-button="4" aria-label="Left shoulder">L1</button></div>
-        <div class="touch-shoulders touch-shoulders-right"><button data-button="5" aria-label="Right shoulder">R1</button><button data-button="7" aria-label="Right trigger">R2</button></div>
-        <div class="touch-stick touch-stick-left" data-axes="0" aria-label="Left joystick"></div>
-        <div class="touch-stick touch-stick-right" data-axes="2" aria-label="Right joystick"></div>
-        <div class="touch-dpad" aria-label="Directional pad"><button data-button="12" aria-label="D-pad up">↑</button><button data-button="14" aria-label="D-pad left">←</button><button data-button="15" aria-label="D-pad right">→</button><button data-button="13" aria-label="D-pad down">↓</button></div>
-        <div class="touch-buttons" aria-label="Action buttons"><button data-button="3" aria-label="Triangle">△</button><button data-button="2" aria-label="Square">□</button><button data-button="1" aria-label="Circle">○</button><button data-button="0" aria-label="Cross">×</button></div>
-        <div class="touch-system"><button data-button="8">Select</button><button data-button="9">Start</button></div>
-        <button class="touch-stick-click touch-stick-click-left" data-button="10" aria-label="Press left joystick">L3</button>
-        <button class="touch-stick-click touch-stick-click-right" data-button="11" aria-label="Press right joystick">R3</button>
+        <div class="touch-shoulders touch-shoulders-left">
+          <button data-button="6" aria-label="Left trigger">L2</button
+          ><button data-button="4" aria-label="Left shoulder">L1</button>
+        </div>
+        <div class="touch-shoulders touch-shoulders-right">
+          <button data-button="5" aria-label="Right shoulder">R1</button
+          ><button data-button="7" aria-label="Right trigger">R2</button>
+        </div>
+        <div
+          class="touch-stick touch-stick-left"
+          data-axes="0"
+          aria-label="Left joystick"
+        ></div>
+        <div
+          class="touch-stick touch-stick-right"
+          data-axes="2"
+          aria-label="Right joystick"
+        ></div>
+        <div class="touch-dpad" aria-label="Directional pad">
+          <button data-button="12" aria-label="D-pad up">↑</button
+          ><button data-button="14" aria-label="D-pad left">←</button
+          ><button data-button="15" aria-label="D-pad right">→</button
+          ><button data-button="13" aria-label="D-pad down">↓</button>
+        </div>
+        <div class="touch-buttons" aria-label="Action buttons">
+          <button data-button="3" aria-label="Triangle">△</button
+          ><button data-button="2" aria-label="Square">□</button
+          ><button data-button="1" aria-label="Circle">○</button
+          ><button data-button="0" aria-label="Cross">×</button>
+        </div>
+        <div class="touch-system">
+          <button data-button="8">Select</button
+          ><button data-button="9">Start</button>
+        </div>
+        <button
+          class="touch-stick-click touch-stick-click-left"
+          data-button="10"
+          aria-label="Press left joystick"
+        >
+          L3
+        </button>
+        <button
+          class="touch-stick-click touch-stick-click-right"
+          data-button="11"
+          aria-label="Press right joystick"
+        >
+          R3
+        </button>
       </div>
     </main>
   </body>

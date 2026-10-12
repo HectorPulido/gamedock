@@ -323,3 +323,29 @@ docker run --rm --network host \
 Remove only the QA portal and its two QA volumes after testing. The fixture stops
 its game instances and deletes its temporary catalog entry, while deliberately
 retaining the game volume to verify persistence.
+
+
+## Browser FSR 1
+
+- Uses AMD's upstream MIT-licensed FSR 1 EASU + RCAS shaders through WebGL 2,
+  applied to the decoded Xpra canvas. Source/game/video dimensions do not change.
+- Standalone Chromium tests cover shader orientation and colors, pointer
+  passthrough, disposal/recreation at identical dimensions, filter switching and
+  unavailable-WebGL fallback. Run `tests/fsr_browser.py` using the browser QA image.
+- Real Xpra tests use a 960×540 desktop enlarged to 1600×900 and compare Smooth,
+  Sharp and FSR; mouse coordinates are checked through fit and fullscreen changes.
+  The presentation layer lives inside the iframe so Xpra toolbar/cursor DOM can
+  remain above it. `tests/fsr_xpra_browser.py` runs against a disposable QA portal.
+- Software Chromium measured approximately 100 ms shader initialization and
+  0.4–8.7 ms CPU submission time in the standalone fixture. Real 540p samples
+  varied from 2.7 to 84.9 ms across concurrent-build reruns. These figures
+  are not GPU execution time, game FPS, end-to-end latency or mobile performance.
+  Physical phones and native GPUs still need performance and battery testing.
+- FSR cannot recover detail absent from a 540p source. The comparison establishes
+  functionality, not a universal visual-quality advantage over the existing modes.
+- Viewer-only streaming settings are omitted from the game container environment;
+  existing runtime images need no schema update to use the browser's FSR filter.
+- Real Xpra fullscreen toolbar entry and exit also passed, keeping FSR visible.
+  Explicit WebGL context loss triggers the tested Smooth fallback.
+- Comparison artifacts: `/tmp/gamedock-streaming-artifacts/xpra-540-smooth.png`,
+  `xpra-540-crisp.png`, `xpra-540-fsr.png` and `fsr-colors.png`.

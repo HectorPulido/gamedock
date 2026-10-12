@@ -281,7 +281,15 @@ class Docker:
             "Env": [
                 "GAMEDOCK_RESOLUTION=" + resolution,
                 "GAMEDOCK_STREAMING="
-                + json.dumps(profile.get("streaming", STREAMING_DEFAULTS)),
+                + json.dumps(
+                    {
+                        key: value
+                        for key, value in profile.get(
+                            "streaming", STREAMING_DEFAULTS
+                        ).items()
+                        if STREAMING_FIELDS[key]["group"] != "Viewer"
+                    }
+                ),
             ]
             + [k + "=" + v for k, v in profile["env"].items()],
             "Labels": {

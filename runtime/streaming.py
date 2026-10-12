@@ -41,10 +41,10 @@ STREAMING_FIELDS = {
     ),
     "canvas_filter": choice(
         "Default canvas filter",
-        "smooth",
-        ["smooth", "crisp"],
+        "fsr",
+        ["fsr", "smooth", "crisp"],
         "Viewer",
-        "Smooth blends enlarged pixels; crisp keeps pixel edges sharp.",
+        "FSR 1 uses client-side EASU + RCAS after decoding, with Smooth fallback. Game and video resolution stay unchanged.",
     ),
     "restore_focus": toggle(
         "Return keyboard focus after header controls", True, "Viewer"

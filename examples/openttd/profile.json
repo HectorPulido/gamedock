@@ -3,7 +3,14 @@
   "name": "OpenTTD",
   "description": "Build a transport network in your own desktop.",
   "image": "gamedock-openttd:local",
-  "command": ["/usr/local/bin/launch-openttd"],
-  "resolutions": ["1280x720", "1920x1080"],
-  "env": {}
+  "command": [
+    "/usr/local/bin/launch-openttd"
+  ],
+  "resolutions": [
+    "960x540",
+    "1280x720",
+    "1920x1080"
+  ],
+  "env": {},
+  "default_resolution": "960x540"
 }

@@ -482,8 +482,20 @@ session shows a clear return-to-library state instead of a blank iframe.
 
 ### Viewer diagnostics and scaling
 
-The player offers fit, original-size and integer scaling, plus smooth/crisp canvas
-filters. These change presentation, not the source resolution or missing detail.
+The player offers fit, original-size and integer scaling, plus FSR 1, Smooth and
+Sharp canvas filters. FSR 1 is the default for new settings; saved explicit filter
+preferences remain unchanged. Server defaults resets the browser preference.
+
+FSR 1 runs AMD's EASU and RCAS passes using WebGL 2 after Xpra decodes the image.
+Only the presentation canvas grows to the player's viewport; game resolution and
+transmitted video stay unchanged. The OpenTTD example defaults to 960×540 and
+also offers 1280×720 and 1920×1080. Other game profiles are not migrated.
+The original desktop canvas continues handling input, preserving mouse mapping.
+Unsupported WebGL 2, context loss or GPU texture limits fall back to Smooth.
+WebGL 2 avoids the secure-context and support requirements of a WebGPU backend.
+Upscaling can improve edges and perceived sharpness, but cannot reconstruct
+missing detail such as small chat text. Texture upload and both shader passes
+consume resources on the player's device; this is not a zero-copy video path.
 Administration → Streaming sets defaults, automatic keyboard-focus recovery,
 diagnostics availability and the sample interval (1–10 seconds). Viewer scale
 and filter choices are remembered locally; Server defaults resets them.

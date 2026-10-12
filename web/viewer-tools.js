@@ -1,6 +1,9 @@
 /* Same-origin Xpra bridge. These counters observe real draw/decode work. */
 window.GameDockViewer = (() => {
   function create(frame) {
+    const fsr = GameDockFSR.create(frame);
+    let filterMode = "smooth";
+    let bridgeTimer;
     let client,
       originals,
       server,
@@ -20,7 +23,8 @@ window.GameDockViewer = (() => {
       const next = frame.contentWindow?.client;
       if (!next?.connected || !next.packet_handlers?.draw) return false;
       if (next === client) return true;
-      dispose();
+      if (client) dispose(false);
+      fsr.enable(filterMode === "fsr");
       client = next;
       const draw = client.packet_handlers.draw;
       const ack = client.do_send_damage_sequence;
@@ -44,6 +48,7 @@ window.GameDockViewer = (() => {
         error,
       ) {
         const item = pending.get(sequence);
+        fsr.dirty();
         if (micros >= 0 && !error) {
           decoded++;
           if (item?.complete) decodedFrames++;
@@ -64,7 +69,12 @@ window.GameDockViewer = (() => {
       originals = { draw, ack, receive, acknowledge, doc, info };
       return true;
     }
-    function dispose() {
+    function dispose(final = true) {
+      if (final) {
+        clearInterval(bridgeTimer);
+        bridgeTimer = undefined;
+      }
+      fsr.dispose();
       if (originals && client) {
         if (client.packet_handlers.draw === originals.receive)
           client.packet_handlers.draw = originals.draw;
@@ -110,6 +120,14 @@ window.GameDockViewer = (() => {
       }
     }
     function filter(mode) {
+      filterMode = mode;
+      if (mode === "fsr" && !bridgeTimer)
+        bridgeTimer = setInterval(connect, 500);
+      if (mode !== "fsr") {
+        clearInterval(bridgeTimer);
+        bridgeTimer = undefined;
+      }
+      fsr.enable(mode === "fsr");
       const doc = frame.contentDocument;
       if (!doc) return;
       let style = doc.querySelector("#gamedock-canvas-filter");
@@ -152,6 +170,10 @@ window.GameDockViewer = (() => {
       };
       const dt = previous ? (now - previous.at) / 1000 : 0;
       const result = {
+        scaler:
+          filterMode === "fsr"
+            ? fsr.sample()
+            : { mode: filterMode, reason: "", submit_ms: null, output: "" },
         connected: true,
         warming: !dt,
         codecs: [...codecs]

@@ -1,4 +1,5 @@
 import os
+import json
 import asyncio
 import sqlite3
 import tempfile
@@ -607,6 +608,13 @@ class API(unittest.IsolatedAsyncioTestCase):
                 "env": {},
                 "memory_mb": 1536,
                 "cpus": 0.75,
+                "streaming": {
+                    "canvas_filter": "fsr",
+                    "viewer_scale": "fit",
+                    "restore_focus": False,
+                    "quality": 80,
+                    "diagnostics_enabled": False,
+                },
             },
             "1280x720",
         )
@@ -616,6 +624,14 @@ class API(unittest.IsolatedAsyncioTestCase):
             if "/containers/create?name=gamedock-test" == c.args[1]
         )
         host = call.args[2]["HostConfig"]
+        streaming = json.loads(
+            next(
+                value.split("=", 1)[1]
+                for value in call.args[2]["Env"]
+                if value.startswith("GAMEDOCK_STREAMING=")
+            )
+        )
+        self.assertEqual(streaming, {"quality": 80, "diagnostics_enabled": False})
         self.assertEqual(host["Memory"], 1536 * 1024**2)
         self.assertEqual(host["NanoCpus"], 750000000)
         self.assertEqual(host["CapDrop"], ["ALL"])
