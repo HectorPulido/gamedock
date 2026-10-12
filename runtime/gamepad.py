@@ -198,6 +198,28 @@ def serve():
         def log_message(self, *_):
             pass
 
+        def do_GET(self):
+            if self.path != "/viewers":
+                self.send_error(404)
+                return
+            try:
+                path = (
+                    Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp/gamedock-runtime"))
+                    / "viewers.json"
+                )
+                data = json.loads(path.read_text())
+                if not 0 <= time.time() - data["updated"] <= 5:
+                    raise ValueError("Stale presence")
+                body = json.dumps(data).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except (OSError, ValueError, KeyError, TypeError):
+                self.send_error(503, "Viewer presence unavailable")
+
         def do_POST(self):
             try:
                 length = int(self.headers.get("Content-Length", "0"))

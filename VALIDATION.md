@@ -246,3 +246,80 @@ Visibility recovery and 20 Hz comparison (2026-10-12):
   and `visibility-6mbps.json`; the recovered canvas screenshot is in that folder.
 - Local runtime, OpenTTD and NVIDIA/AMD/Intel images include the patch for new
   sessions. Existing user sessions were not restarted.
+
+### Viewer disconnection lifecycle (2026-10-12)
+
+- Generic viewer leases are tracked by the authorized desktop WebSocket proxy;
+  HTTP, input activity and controller requests do not acquire leases. Cleanup
+  and incoming reservations share the launch lock. Runtime snapshots are fetched
+  outside the lock, with a generation check and an atomic final expiry/stop check.
+- Python suite: 65 tests, 56 passed and 9 runtime-only skips. The six Xpra
+  idle/visibility/batching tests also passed in the updated runtime. New tests
+  exercise connected spectators, two viewers, reconnect cancellation, separate
+  first-viewer grace, disabled migration defaults, query errors/invalid presence,
+  restart reconciliation, idempotent concurrent stops, a handshake pending at
+  expiry, reconnection during an in-flight snapshot, Origin/ownership and session
+  revocation. A socket that ignores WebSocket PING is reclaimed without browser
+  unload events.
+- `tests/test_presence.py` checks that the lightweight runtime publisher counts
+  only open window sources, excludes non-UI metric clients, remembers prior
+  viewers, and replaces stale bootstrap counts when a new portal proxy connects.
+- `tests/viewers_browser.py` exercised actual Chromium, Xpra, GLX rendering and
+  Docker against the disposable portal `gamedock-viewers-portal-qa` at
+  `http://localhost:18089`, with its own database and volume namespace. Tests use
+  12 seconds of disconnect grace and 45 seconds for the first viewer to shorten
+  the run. The restart phase uses the actual 60-second default, then restores
+  12 seconds for stop timing; production defaults remain 60 and 180 seconds,
+  with action disabled.
+- A new instance remained running without a viewer for 15 seconds. One connected
+  viewer without input remained running beyond disconnect grace. Two tabs
+  reported two viewers; closing one retained the instance. Reconnection reused
+  the same instance and cancelled the stop. A real portal restart initially
+  reported presence unknown, without scheduling a stop, and reconnection worked.
+  Five successive rapid restart/reconnect cycles also passed. An earlier run
+  with only 12 seconds for restart/loading expired before the new WebSocket
+  arrived; HTTP loading deliberately does not count as a viewer. The restart
+  acceptance fixture now uses the proposed production grace of 60 seconds.
+- Closing the last viewer automatically removed both the game and namespace
+  guard containers about 14.5 seconds after confirmed disconnect (12-second
+  grace plus the five-second worker cadence). Docker returned 404 for both;
+  no game processes or cgroup CPU/memory allocation remained. Before stopping,
+  the container used approximately 174% CPU, 410 MB and 32 processes/threads.
+  These measurements include Xpra and the GLX workload, not only the game.
+- The next launch acquired the freed slot and read the persistent marker from
+  the same named volume. Settings were also saved and reloaded through the
+  browser; the English form and a 390 px mobile viewport passed.
+- This Mac/OrbStack test used software Mesa rendering. Native NVIDIA/AMD/Intel
+  GPU resource accounting was not measured; container removal uses the same
+  generic cleanup path. All five local runtime/game/GPU image variants were
+  checked for the presence and batching patches. No remote game deployment was
+  changed.
+- Artifacts: `/tmp/gamedock-viewer-artifacts/viewers-browser.json`,
+  `viewer-presence-admin.png`, and `viewer-settings.png`.
+
+Reproduce using a disposable portal (the browser fixture intentionally restarts
+only the named QA portal):
+
+```sh
+docker run -d --name gamedock-viewers-portal-qa \
+  -p 127.0.0.1:18089:8080 \
+  -e PUBLIC_URL=http://localhost:18089 \
+  -e ADMIN_PASSWORD=gamedock-viewers-test-password \
+  -e GAMEDOCK_NAMESPACE=gamedock-viewers-qa \
+  -e PORTAL_CONTAINER=gamedock-viewers-portal-qa \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v gamedock-viewers-portal-qa:/data gamedock-portal:local
+mkdir -p /tmp/gamedock-viewer-artifacts
+printf 'ADMIN_PASSWORD=gamedock-viewers-test-password\n' > /tmp/gamedock-viewers-qa.env
+docker run --rm --network host \
+  -v "$PWD:/app:ro" \
+  -v /tmp/gamedock-viewers-qa.env:/qa.env:ro \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v /tmp/gamedock-viewer-artifacts:/artifacts \
+  -e QA_URL=http://localhost:18089 \
+  --entrypoint python gamedock-browser-qa:h264 /app/tests/viewers_browser.py
+```
+
+Remove only the QA portal and its two QA volumes after testing. The fixture stops
+its game instances and deletes its temporary catalog entry, while deliberately
+retaining the game volume to verify persistence.

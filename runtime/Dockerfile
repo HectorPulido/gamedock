@@ -10,6 +10,8 @@ COPY patch-xpra-visibility.py /tmp/patch-xpra-visibility.py
 RUN python3 /tmp/patch-xpra-visibility.py && rm /tmp/patch-xpra-visibility.py
 COPY patch-xpra-batching.py /tmp/patch-xpra-batching.py
 RUN python3 /tmp/patch-xpra-batching.py && rm /tmp/patch-xpra-batching.py
+COPY gamedock_presence.py patch-xpra-presence.py /tmp/
+RUN python3 /tmp/patch-xpra-presence.py && rm /tmp/patch-xpra-presence.py /tmp/gamedock_presence.py
 COPY gamedock_metrics.py patch-xpra-metrics.py /tmp/
 RUN python3 /tmp/patch-xpra-metrics.py && rm /tmp/patch-xpra-metrics.py /tmp/gamedock_metrics.py
 COPY gamepad.py streaming.py gpu.py /usr/local/bin/

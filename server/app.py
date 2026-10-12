@@ -16,6 +16,7 @@ from pathlib import Path
 import aiohttp
 from aiohttp import web
 
+from server.viewers import Presence, DesktopStopped
 from network.policy import validate_policy, DNS
 from runtime.gpu import validate_gpu, docker_gpu
 from runtime.streaming import (
@@ -537,6 +538,9 @@ def config(app):
         "desktop_toolbar": DESKTOP_TOOLBAR,
         "invite_required": True,
         "idle_minutes": 30,
+        "viewer_action": "disabled",
+        "viewer_disconnect_seconds": 60,
+        "viewer_first_connect_seconds": 180,
         **RESOURCE_DEFAULTS,
         "appearance": {},
         **saved,
@@ -734,6 +738,11 @@ async def instances(request):
                         "UPDATE instances SET status=? WHERE id=?",
                         (item["status"], item["id"]),
                     )
+                item["viewers"] = (
+                    app["viewers"]
+                    .setdefault(item["id"], Presence())
+                    .report(config(app), time.time())
+                )
                 result.append(item)
             return web.json_response(result)
     body = await request.json()
@@ -839,6 +848,7 @@ async def instances(request):
             app["db"].execute("UPDATE instances SET status='failed' WHERE id=?", (sid,))
             raise
         app["db"].execute("UPDATE instances SET status='running' WHERE id=?", (sid,))
+        app["viewers"][sid] = Presence(known=True, since=time.time())
     return web.json_response(
         {"id": sid, "url": "/play/" + sid, "status": "running"}, status=201
     )
@@ -881,6 +891,17 @@ async def admin_settings(request):
             if type(body[field]) is not bool:
                 raise ValueError("Invalid " + field)
             cfg[field] = body[field]
+    if "viewer_action" in body:
+        if body["viewer_action"] not in ("disabled", "stop"):
+            raise ValueError("Invalid viewer disconnect action")
+        cfg["viewer_action"] = body["viewer_action"]
+    for key in ("viewer_disconnect_seconds", "viewer_first_connect_seconds"):
+        if key in body:
+            if type(body[key]) is not int or not 1 <= body[key] <= 86400:
+                raise ValueError(
+                    "Viewer grace periods must be between 1 and 86400 seconds"
+                )
+            cfg[key] = body[key]
     if "idle_minutes" in body:
         if (
             type(body["idle_minutes"]) is not int
@@ -1027,6 +1048,28 @@ async def proxy(request):
     origin = request.headers.get("Origin")
     if origin and origin != request.app["origin"]:
         raise web.HTTPForbidden(text="Invalid origin")
+    if request.headers.get("Upgrade", "").lower() != "websocket":
+        return await desktop_proxy(request)
+    app, sid, token = request.app, instance["id"], object()
+    # Reserve before any network await. Cleanup and incoming handshakes share a lock.
+    async with app["launch_lock"]:
+        instance = owned(request)
+        if instance["status"] != "running":
+            raise web.HTTPConflict(text="Instance stopped")
+        presence = app["viewers"].setdefault(sid, Presence())
+        presence.connect(token)
+    try:
+        return await desktop_proxy(request)
+    finally:
+        async with app["launch_lock"]:
+            presence.disconnect(token, time.time())
+
+
+async def desktop_proxy(request):
+    instance = owned(request)
+    origin = request.headers.get("Origin")
+    if origin and origin != request.app["origin"]:
+        raise web.HTTPForbidden(text="Invalid origin")
     if instance["status"] != "running":
         raise web.HTTPConflict(text="Instance stopped")
     if (
@@ -1111,9 +1154,10 @@ async def proxy(request):
             target, protocols=protocols, max_msg_size=16 * 1024**2
         ) as upstream:
             downstream = web.WebSocketResponse(
-                protocols=protocols, max_msg_size=16 * 1024**2
+                protocols=protocols, max_msg_size=16 * 1024**2, heartbeat=10
             )
             await downstream.prepare(request)
+            request.app["viewers"][instance["id"]].ever_seen = True
 
             async def pump(source, dest):
                 async for message in source:
@@ -1233,13 +1277,121 @@ async def expire_idle(app, now=None):
             )
 
 
+async def query_viewers(app, sid):
+    """Internal-only, bounded, cheap snapshot. Never query full Xpra metrics."""
+    info = await app["docker"].inspect(sid)
+    if not info or not info["State"]["Running"]:
+        raise DesktopStopped()
+    await app["docker"].ensure_connection(sid)
+    network = info["NetworkSettings"]["Networks"]["gamedock-session-" + sid]
+    from yarl import URL
+
+    target = URL.build(
+        scheme="http", host=network["IPAddress"], port=6085, path="/viewers"
+    )
+    async with app["http"].get(
+        target, timeout=aiohttp.ClientTimeout(total=2)
+    ) as response:
+        response.raise_for_status()
+        body = bytearray()
+        async for chunk in response.content.iter_chunked(4097):
+            body.extend(chunk)
+            if len(body) > 4096:
+                raise ValueError("Invalid viewer snapshot size")
+        data = json.loads(body)
+    updated = data["updated"]
+    if type(updated) not in (int, float) or not 0 <= time.time() - updated <= 5:
+        raise ValueError("Stale viewer presence")
+    return data
+
+
+async def stop_unviewed(app, sid):
+    try:
+        await app["docker"].stop(sid)
+    except Exception:
+        app["logger"].exception("Viewer cleanup failed for %s; retrying", sid)
+        return
+    app["db"].execute(
+        "UPDATE instances SET status='stopped' WHERE id=? AND status='running'", (sid,)
+    )
+
+
+async def expire_viewers(app, now=None):
+    rows = (
+        app["db"].execute("SELECT id FROM instances WHERE status='running'").fetchall()
+    )
+    for row in rows:
+        sid = row["id"]
+        async with app["launch_lock"]:
+            cfg = config(app)
+            clock = time.time() if now is None else now
+            presence = app["viewers"].setdefault(sid, Presence())
+            if presence.leases:
+                continue
+            # Also reconcile unknown sessions while disabled so the panel is useful.
+            if (
+                presence.known
+                and not presence.observed
+                and not presence.due(cfg, clock)
+            ):
+                continue
+            generation = presence.generation
+        # Do not block incoming viewer reservations while waiting for the runtime.
+        try:
+            data = await query_viewers(app, sid)
+        except DesktopStopped:
+            # Also finish a previous partial stop (game removed, guard/network
+            # cleanup failed). Unknown/failed queries never enter this path.
+            async with app["launch_lock"]:
+                if generation == presence.generation and not presence.leases:
+                    running = (
+                        app["db"]
+                        .execute(
+                            "SELECT 1 FROM instances WHERE id=? AND status='running'",
+                            (sid,),
+                        )
+                        .fetchone()
+                    )
+                    if running:
+                        await stop_unviewed(app, sid)
+            continue
+        except Exception:
+            async with app["launch_lock"]:
+                if generation == presence.generation and not presence.leases:
+                    presence.known = False
+            continue
+        async with app["launch_lock"]:
+            if presence.leases or generation != presence.generation:
+                continue  # A connection changed while we sampled; discard stale data.
+            running = (
+                app["db"]
+                .execute(
+                    "SELECT 1 FROM instances WHERE id=? AND status='running'", (sid,)
+                )
+                .fetchone()
+            )
+            if not running:
+                continue
+            cfg = config(app)
+            clock = time.time() if now is None else now
+            try:
+                presence.reconcile(data, clock, app["portal_started"])
+            except (KeyError, TypeError, ValueError):
+                presence.known = False
+                continue
+            # Atomic final check through stop. Handshakes reserve using this lock.
+            if presence.due(cfg, clock) and not presence.leases:
+                await stop_unviewed(app, sid)
+
+
 async def idle_worker(app):
     while True:
-        await asyncio.sleep(15)
-        try:
-            await expire_idle(app)
-        except Exception:
-            app["logger"].exception("Inactivity cleanup failed; retrying")
+        await asyncio.sleep(5)
+        for cleanup in (expire_idle, expire_viewers):
+            try:
+                await cleanup(app)
+            except Exception:
+                app["logger"].exception("Session cleanup failed; retrying")
 
 
 async def invitations(request):
@@ -1443,6 +1595,7 @@ def create_app(db_path=None, docker=None):
     app["db"], app["docker"] = db, docker or Docker()
     app["dummy_hash"] = password_hash(secrets.token_hex(20))
     app["attempts"], app["launch_lock"] = {}, asyncio.Lock()
+    app["viewers"], app["portal_started"] = {}, time.time()
     app.cleanup_ctx.append(lifecycle)
     app.router.add_get("/api/catalog", catalog)
     app.router.add_post("/api/auth/{action:login|register}", auth)

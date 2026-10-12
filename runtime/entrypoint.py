@@ -128,6 +128,7 @@ def main():
                     "--bind-tcp=0.0.0.0:6084",
                     "--html=" + str(html_dir),
                     "--mdns=no",
+                    "--sharing=yes",
                     "--pulseaudio=no",
                     "--notifications=no",
                 ]

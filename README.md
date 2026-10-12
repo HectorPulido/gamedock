@@ -266,6 +266,42 @@ restrict future launches without interrupting current games. Administrators may
 choose from a game's configured resolutions and bypass game access restrictions,
 but still obey the platform's global and per-account concurrent limits.
 
+### Stop instances without viewers
+
+Administration → Platform settings separates **Viewer disconnection** from input
+inactivity (`idle_minutes`). `viewer_action` is `disabled` by default, including
+existing databases. Select `stop` to release CPU/GPU resources after the last
+viewer leaves. Defaults: `viewer_disconnect_seconds: 60` and
+`viewer_first_connect_seconds: 180`. Both accept 1–86400 seconds. These are platform
+settings, independent of game, process names, input events and streaming settings.
+Watching without input does not trigger this policy; input inactivity remains a
+separate policy and can still stop connected sessions if enabled.
+
+The backend counts authorized desktop WebSockets, including reconnecting viewers,
+and releases leases in `finally`. HTTP requests and controller requests do not
+count. Browser WebSocket PING/PONG detects dead connections after approximately
+15 seconds; the disconnect grace starts when that loss is detected. Several tabs
+can share an instance. Cleanup checks every five seconds, so a stop can occur up
+to one worker interval after the grace expires, plus container cleanup time.
+Administration → Instances shows viewer count (or **unknown**), time without a
+viewer, first-viewer wait and any pending stop.
+
+Runtime images must include `patch-xpra-presence.py` and the updated controller
+service. Xpra publishes only open UI-client presence once a second; the portal
+reads a small internal snapshot at startup/reconciliation or before expiry,
+without running `xpra info`. A runtime that cannot verify presence stays **unknown**
+and is retried, never stopped by this policy. On portal restart, presence is
+reconciled and sessions receive a fresh grace period. Snapshot reads run outside
+the launch lock; generation checks discard observations made across a connection
+change, and the final check and stop share the lock with incoming handshakes.
+
+Automatic stop uses the ordinary container stop/removal path and preserves named
+volumes. Unsaved game state can be lost, just as with manual Stop. No pause or
+process-specific suspension is implemented. Rebuild runtime and game images, then
+relaunch existing instances before relying on this feature. The migration does
+not enable automatic stops. See `tests/test_viewers.py`, `tests/test_presence.py`
+and `tests/viewers_browser.py` for transition and real-browser acceptance tests.
+
 ### Session networks
 
 Every new session runs behind a dedicated firewall container. The game shares

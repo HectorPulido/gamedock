@@ -342,9 +342,15 @@
                   required
               /></label>
               <p class="help">
-                Use 0 to disable inactivity cleanup. Only mouse and keyboard
-                input count as activity.
+                Use 0 to disable input inactivity cleanup. Mouse, keyboard, touch and controller input count as activity. A connected viewer alone does not reset this timeout.
               </p>
+              <fieldset class="network-settings">
+                <legend>Viewer disconnection</legend>
+                <label>When no viewers remain<select name="viewer_action"><option value="disabled">Disabled</option><option value="stop">Stop instance</option></select></label>
+                <label>Disconnect grace period (seconds)<input name="viewer_disconnect_seconds" type="number" min="1" max="86400" required /></label>
+                <label>Wait for first viewer (seconds)<input name="viewer_first_connect_seconds" type="number" min="1" max="86400" required /></label>
+                <p class="help">Independent of input inactivity. Watching without input keeps a viewer connected. Reconnecting cancels the pending stop. Stopping preserves persistent volumes; unsaved progress may be lost. Presence must be verified by an updated runtime.</p>
+              </fieldset>
               <label
                 >Concurrent instances<input
                   name="max_instances"

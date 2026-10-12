@@ -78,6 +78,9 @@ async function load() {
     "max_instances",
     "per_user",
     "idle_minutes",
+    "viewer_action",
+    "viewer_disconnect_seconds",
+    "viewer_first_connect_seconds",
     "memory_mb",
     "cpus",
   ])
@@ -257,6 +260,15 @@ function renderInstances() {
           instance.status,
       ),
       node("small", instance.id),
+      node("small", (() => {
+        const v = instance.viewers;
+        if (!v || v.count === null) return "Viewers: unknown · awaiting verification";
+        let text = "Viewers: " + v.count;
+        if (v.without_viewer_seconds !== null) text += " · No viewer for " + v.without_viewer_seconds + "s";
+        if (v.waiting_for_first_viewer) text += " · Waiting for first viewer";
+        if (v.stop_pending) text += " · Stop in " + v.stop_in_seconds + "s";
+        return text;
+      })()),
     );
     const controls = node("div", null, "actions");
     const connect = node("a", "Connect", "button secondary");
@@ -297,6 +309,9 @@ $("#settings").onsubmit = (e) => {
       desktop_toolbar: f.elements.desktop_toolbar.checked,
       invite_required: f.elements.invite_required.checked,
       idle_minutes: Number(f.elements.idle_minutes.value),
+      viewer_action: f.elements.viewer_action.value,
+      viewer_disconnect_seconds: Number(f.elements.viewer_disconnect_seconds.value),
+      viewer_first_connect_seconds: Number(f.elements.viewer_first_connect_seconds.value),
       max_instances: Number(f.elements.max_instances.value),
       per_user: Number(f.elements.per_user.value),
       memory_mb: Number(f.elements.memory_mb.value),
