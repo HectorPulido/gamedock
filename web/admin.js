@@ -329,6 +329,8 @@ function editGame(game) {
     ? "Editing an existing game. Save to update its definition. Use New game to start a separate profile."
     : "Create a game with a new ID. Saving an existing ID updates that game.";
   f.enabled.checked = game?.enabled !== false;
+  f.banner.value = game?.banner || "";
+  previewBanner();
   f.memory_mb.value = game?.memory_mb ?? "";
   f.cpus.value = game?.cpus ?? "";
   fillGpu(game?.gpu || {});
@@ -373,10 +375,34 @@ $("#profile").elements.definition.addEventListener("input", (e) => {
   try {
     const game = JSON.parse(e.target.value);
     $("#profile").elements.enabled.checked = game.enabled !== false;
+    $("#profile").elements.banner.value = game.banner || "";
+    previewBanner();
     $("#profile").elements.memory_mb.value = game.memory_mb ?? "";
     $("#profile").elements.cpus.value = game.cpus ?? "";
     fillGpu(game.gpu || {});
     fillNetwork(game);
+  } catch {}
+});
+function previewBanner() {
+  const preview = $("#banner-preview");
+  const url = $("#profile").elements.banner.value.trim();
+  preview.textContent = "▦";
+  if (!/^https?:\/\//.test(url)) return;
+  const image = node("img");
+  image.alt = "";
+  image.src = url;
+  image.onload = () => {
+    if ($("#profile").elements.banner.value.trim() === url)
+      preview.replaceChildren(image);
+  };
+}
+$("#profile").elements.banner.addEventListener("input", (event) => {
+  previewBanner();
+  try {
+    const f = $("#profile").elements;
+    const game = JSON.parse(f.definition.value);
+    game.banner = event.target.value.trim();
+    f.definition.value = JSON.stringify(game, null, 2);
   } catch {}
 });
 $("#profile").elements.enabled.addEventListener("change", (event) => {
@@ -462,6 +488,7 @@ $("#profile").onsubmit = (e) => {
     game.network_policy = networkFromForm();
     game.internet_access = game.network_policy.mode === "internet";
     game.enabled = e.target.elements.enabled.checked;
+    game.banner = e.target.elements.banner.value.trim();
     await api("/admin/games", "PUT", game);
     profileEditing = false;
     await load();

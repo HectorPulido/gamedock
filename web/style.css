@@ -248,6 +248,7 @@ summary:focus-visible {
   color: var(--accent);
 }
 .game-cover img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;

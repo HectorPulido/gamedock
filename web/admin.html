@@ -153,6 +153,19 @@
                 still launch tests.
               </p>
               <label
+                >Card image URL<input
+                  type="url"
+                  name="banner"
+                  placeholder="https://example.com/game-cover.jpg"
+                  maxlength="1000"
+                />
+              </label>
+              <p class="help">
+                Replaces the grid above the game title. Images fill the banner
+                without stretching; edges may be cropped. Leave blank for the default.
+              </p>
+              <div class="game-cover" id="banner-preview" aria-label="Card image preview">▦</div>
+              <label
                 >JSON definition<textarea
                   name="definition"
                   rows="22"

@@ -96,6 +96,8 @@ function renderGames() {
       const img = node("img");
       img.src = game.banner;
       img.alt = "";
+      img.loading = "lazy";
+      img.onerror = () => { cover.textContent = "▦"; };
       cover.append(img);
     } else cover.textContent = "▦";
     const body = node("div", null, "game-body");
