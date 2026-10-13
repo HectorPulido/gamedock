@@ -213,17 +213,28 @@ class ViewerPolicy(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.presence.leases)
         await ws.close()
 
-    async def open_proxy(self, autoping=True):
+    async def open_proxy(self, autoping=True, tail="api/websockets", upstream_autoping=True):
+        self.upstream_messages = []
+
         async def upstream(request):
-            ws = web.WebSocketResponse()
+            # The streaming backend owns liveness/RTT. Portal must forward
+            # control frames rather than acknowledge them prematurely.
+            ws = web.WebSocketResponse(
+                autoping=upstream_autoping, heartbeat=.2 if not autoping and upstream_autoping else None
+            )
             await ws.prepare(request)
+            if not upstream_autoping:
+                await ws.ping(b"server-clock")
             async for message in ws:
+                self.upstream_messages.append((message.type, message.data))
                 if message.type == web.WSMsgType.TEXT:
                     await ws.send_str(message.data)
+                elif message.type == web.WSMsgType.PING:
+                    await ws.pong(message.data)
             return ws
 
         upstream_app = web.Application()
-        upstream_app.router.add_get("/", upstream)
+        upstream_app.router.add_get("/{tail:.*}", upstream)
         self.upstream = TestServer(upstream_app)
         await self.upstream.start_server()
         self.addAsyncCleanup(self.upstream.close)
@@ -236,7 +247,7 @@ class ViewerPolicy(unittest.IsolatedAsyncioTestCase):
             url.with_port(self.upstream.port), **kwargs
         )
         ws = await self.client.ws_connect(
-            "/desktop/" + self.sid + "/", headers=self.headers, autoping=autoping
+            "/desktop/" + self.sid + "/" + tail, headers=self.headers, autoping=autoping
         )
         self.addAsyncCleanup(ws.close)
         return ws
@@ -259,6 +270,62 @@ class ViewerPolicy(unittest.IsolatedAsyncioTestCase):
             await asyncio.sleep(0.01)
         self.assertFalse(self.presence.leases)
         self.assertIsNotNone(self.presence.since)
+
+    async def test_auxiliary_socket_does_not_create_viewer(self):
+        await self.setup_instance()
+        ws = await self.open_proxy(tail="api/file-manager/ws")
+        await ws.send_str("auxiliary")
+        self.assertEqual((await ws.receive()).data, "auxiliary")
+        self.assertFalse(self.presence.leases)
+        self.assertFalse(self.presence.ever_seen)
+        await ws.close()
+
+    async def test_multiple_selkies_tabs_close_and_reconnect(self):
+        await self.setup_instance()
+        first = await self.open_proxy()
+        second = await self.open_proxy()
+        self.assertEqual(self.presence.report({
+            "viewer_action": "stop", "viewer_disconnect_seconds": 60,
+            "viewer_first_connect_seconds": 180,
+        }, time.time())["count"], 2)
+        await first.close()
+        for _ in range(100):
+            if len(self.presence.leases) == 1:
+                break
+            await asyncio.sleep(.01)
+        self.assertEqual(len(self.presence.leases), 1)
+        await self.sweep(time.time() + 1000)
+        self.stop.assert_not_awaited()
+        await second.close()
+        for _ in range(100):
+            if not self.presence.leases:
+                break
+            await asyncio.sleep(.01)
+        self.assertIsNotNone(self.presence.since)
+        reconnected = await self.open_proxy()
+        self.assertIsNone(self.presence.since)
+        await self.sweep(time.time() + 1000)
+        self.stop.assert_not_awaited()
+        await reconnected.close()
+
+    async def test_ping_pong_crosses_portal_in_both_directions(self):
+        await self.setup_instance()
+        ws = await self.open_proxy(autoping=False, upstream_autoping=False)
+        ping = await ws.receive(timeout=2)
+        self.assertEqual(ping.type, web.WSMsgType.PING)
+        self.assertEqual(ping.data, b"server-clock")
+        await ws.pong(ping.data)
+        for _ in range(100):
+            if (web.WSMsgType.PONG, b"server-clock") in self.upstream_messages:
+                break
+            await asyncio.sleep(.01)
+        self.assertIn((web.WSMsgType.PONG, b"server-clock"), self.upstream_messages)
+        await ws.ping(b"browser-clock")
+        pong = await ws.receive(timeout=2)
+        self.assertEqual(pong.type, web.WSMsgType.PONG)
+        self.assertEqual(pong.data, b"browser-clock")
+        self.assertIn((web.WSMsgType.PING, b"browser-clock"), self.upstream_messages)
+        await ws.close()
 
     async def test_dead_socket_heartbeat_without_browser_exit_events(self):
         await self.setup_instance()

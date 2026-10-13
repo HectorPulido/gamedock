@@ -1,253 +1,109 @@
-/* Same-origin Xpra bridge. These counters observe real draw/decode work. */
+/* Same-origin Selkies bridge. Player preferences never change server encoding. */
 window.GameDockViewer = (() => {
   function create(frame) {
     const fsr = GameDockFSR.create(frame);
-    let filterMode = "smooth";
-    let bridgeTimer;
-    let client,
-      originals,
-      server,
-      serverAt = 0,
-      previous;
-    let updates = 0,
-      frames = 0,
-      decoded = 0,
-      decodedFrames = 0,
-      bytes = 0;
-    let decodeTotal = 0,
-      decodeCount = 0,
-      errors = 0;
-    let codecs = new Map(),
-      pending = new Map();
-    function connect() {
-      const next = frame.contentWindow?.client;
-      if (!next?.connected || !next.packet_handlers?.draw) return false;
-      if (next === client) return true;
-      if (client) dispose(false);
-      fsr.enable(filterMode === "fsr");
-      client = next;
-      const draw = client.packet_handlers.draw;
-      const ack = client.do_send_damage_sequence;
-      const receive = function (packet) {
-        const code = frame.contentWindow.Utilities.s(packet[6]);
-        updates++;
-        const complete = !packet[10]?.flush;
-        if (complete) frames++;
-        bytes += packet[7]?.byteLength ?? packet[7]?.length ?? 0;
-        codecs.set(code, (codecs.get(code) || 0) + 1);
-        pending.set(packet[8], { complete, started: performance.now() });
-        if (pending.size > 4096) pending.delete(pending.keys().next().value);
-        return draw.call(this, packet);
-      };
-      const acknowledge = function (
-        sequence,
-        wid,
-        width,
-        height,
-        micros,
-        error,
-      ) {
-        const item = pending.get(sequence);
-        fsr.dirty();
-        if (micros >= 0 && !error) {
-          decoded++;
-          if (item?.complete) decodedFrames++;
-          decodeTotal += micros / 1000;
-          decodeCount++;
-        } else errors++;
-        pending.delete(sequence);
-        return ack.call(this, sequence, wid, width, height, micros, error);
-      };
-      client.packet_handlers.draw = receive;
-      client.do_send_damage_sequence = acknowledge;
+    let filterMode = 'smooth', connectedWindow, renderTimer, diagnosticsOpen = false;
+    let volume = 1, muted = false, resourceMetrics, resourceAt = 0, resourcePending = false;
+    function post(type, options = {}) {
+      frame.contentWindow?.postMessage({type, ...options}, location.origin);
+    }
+    function stylesheet(id, text) {
       const doc = frame.contentDocument;
-      const info = (event) => {
-        server = event.data;
-        serverAt = performance.now();
-      };
-      doc.addEventListener("info-response", info);
-      originals = { draw, ack, receive, acknowledge, doc, info };
+      if (!doc?.head) return;
+      let style = doc.getElementById(id);
+      if (!style) { style = doc.createElement('style'); style.id = id; doc.head.append(style); }
+      style.textContent = text;
+    }
+    function connect() {
+      const win = frame.contentWindow;
+      if (!win || !frame.contentDocument?.querySelector('canvas,video')) return false;
+      if (win !== connectedWindow) {
+        connectedWindow = win;
+        // Keep input coordinates at the fixed source resolution. The outer
+        // GameDock iframe handles fit/original/integer scaling locally.
+        post('setScaleLocally', {value: true});
+        post('setVolume', {value: volume});
+        post('setMute', {value: muted});
+        post('statsOpen', {open: diagnosticsOpen});
+        stylesheet('gamedock-vendor-ui', '.sidebar,.toggle-handle{display:none!important;pointer-events:none!important}');
+
+      }
       return true;
     }
-    function dispose(final = true) {
-      if (final) {
-        clearInterval(bridgeTimer);
-        bridgeTimer = undefined;
-      }
-      fsr.dispose();
-      if (originals && client) {
-        if (client.packet_handlers.draw === originals.receive)
-          client.packet_handlers.draw = originals.draw;
-        if (client.do_send_damage_sequence === originals.acknowledge)
-          client.do_send_damage_sequence = originals.ack;
-        originals.doc.removeEventListener("info-response", originals.info);
-      }
-      client = originals = server = previous = undefined;
-      serverAt =
-        updates =
-        frames =
-        decoded =
-        decodedFrames =
-        bytes =
-        decodeTotal =
-        decodeCount =
-        errors =
-          0;
-      pending.clear();
-      codecs.clear();
+    function dispose() {
+      clearInterval(renderTimer); renderTimer = undefined;
+      if (connectedWindow) post('statsOpen', {open: false});
+      connectedWindow = undefined; resourceMetrics = undefined; resourceAt = 0; fsr.dispose();
     }
     function focus() {
-      const xpra = frame.contentWindow?.client;
-      if (!xpra?.connected || frame.hidden) return;
-      frame.contentWindow.focus();
-      xpra.capture_keyboard = true;
-      xpra.container.tabIndex = 0;
-      xpra.container.focus({ preventScroll: true });
-      const windows = Object.values(xpra.id_to_window || {}).filter(
-        (win) => win && !win.tray && !win.override_redirect && !win.minimized,
-      );
-      const target = windows.reduce(
-        (best, win) =>
-          !best ||
-          Number(win.stacking_layer || 0) >= Number(best.stacking_layer || 0)
-            ? win
-            : best,
-        null,
-      );
-      if (target) {
-        xpra.focused_wid = 0;
-        xpra.set_focus(target);
-      }
+      if (frame.hidden) return;
+      frame.contentWindow?.focus();
+      const target = frame.contentDocument?.querySelector('canvas,video');
+      if (target) { target.tabIndex = 0; target.focus({preventScroll: true}); }
     }
     function filter(mode) {
       filterMode = mode;
-      if (mode === "fsr" && !bridgeTimer)
-        bridgeTimer = setInterval(connect, 500);
-      if (mode !== "fsr") {
-        clearInterval(bridgeTimer);
-        bridgeTimer = undefined;
-      }
-      fsr.enable(mode === "fsr");
-      const doc = frame.contentDocument;
-      if (!doc) return;
-      let style = doc.querySelector("#gamedock-canvas-filter");
-      if (!style) {
-        style = doc.createElement("style");
-        style.id = "gamedock-canvas-filter";
-        doc.head.append(style);
-      }
-      const rendering = mode === "crisp" ? "pixelated" : "auto";
-      frame.style.imageRendering = rendering;
-      style.textContent = `canvas { image-rendering: ${rendering} !important; }`;
-      for (const win of Object.values(
-        frame.contentWindow?.client?.id_to_window || {},
-      )) {
-        for (const ctx of [win.canvas_ctx, win.offscreen_canvas_ctx])
-          if (ctx) ctx.imageSmoothingEnabled = mode !== "crisp";
+      fsr.enable(mode === 'fsr');
+      stylesheet('gamedock-canvas-filter', `canvas,video{image-rendering:${mode === 'crisp' ? 'pixelated' : 'auto'}!important}`);
+      connect();
+      if (!renderTimer) {
+        let lastConnect = 0;
+        renderTimer = setInterval(() => {
+          if (performance.now() - lastConnect > 500) { connect(); lastConnect = performance.now(); }
+          if (filterMode === 'fsr' && !document.hidden && !frame.hidden) fsr.dirty();
+        }, 1000 / 30);
       }
     }
-    function remotePointer(visible = false) {
-      const doc = frame.contentDocument;
-      if (!doc?.head) return;
-      let style = doc.querySelector("#gamedock-remote-pointer");
-      if (!style) {
-        style = doc.createElement("style");
-        style.id = "gamedock-remote-pointer";
-        doc.head.append(style);
-      }
-      // Keep the element for Xpra's packet handler. Its inline display updates
-      // cannot override this rule; the native cursor and input are untouched.
-      style.textContent = visible
-        ? ""
-        : "#shadow_pointer { display: none !important; visibility: hidden !important; }";
+    // Selkies supplies a single live cursor; never hide its native input cursor.
+    function remotePointer() {}
+    function audio(value, mute) {
+      volume = Math.min(1, Math.max(0, Number(value)));
+      muted = !!mute;
+      post('setVolume', {value: volume}); post('setMute', {value: muted});
     }
-    function flatten(value, prefix = "", result = {}) {
-      for (const [key, item] of Object.entries(value || {})) {
-        const name = prefix ? prefix + "." + key : key;
-        if (item && typeof item === "object" && !Array.isArray(item))
-          flatten(item, name, result);
-        else result[name] = item;
-      }
-      return result;
+    function diagnostics(open) {
+      diagnosticsOpen = !!open;
+      post('statsOpen', {open: diagnosticsOpen});
     }
     function sample() {
-      if (!connect()) return { connected: false };
-      const now = performance.now();
-      const current = {
-        at: now,
-        updates,
-        frames,
-        decoded,
-        decodedFrames,
-        bytes,
-        decodeTotal,
-        decodeCount,
-      };
-      const dt = previous ? (now - previous.at) / 1000 : 0;
+      const connected = connect(), win = frame.contentWindow;
+      if (diagnosticsOpen && !resourcePending && typeof fetch === 'function') {
+        resourcePending = true;
+        fetch(new URL('api/gamedock/metrics', frame.src), {credentials: 'same-origin'})
+          .then(response => response.ok ? response.json() : null)
+          .then(data => { if (data?.backend === 'selkies') { resourceMetrics = data; resourceAt = Date.now(); } })
+          .catch(() => {})
+          .finally(() => {resourcePending = false;});
+      }
+      const latest = win?.stream_stats?.latest || {};
+      const info = win?.stream_info || {}, client = win?.stream_client || {};
+      const age = latest.t ? Math.max(0, (Date.now() - latest.t) / 1000) : null;
+      const fresh = age != null && age < 5;
       const result = {
-        scaler:
-          filterMode === "fsr"
-            ? fsr.sample()
-            : { mode: filterMode, reason: "", submit_ms: null, output: "" },
-        connected: true,
-        warming: !dt,
-        codecs: [...codecs]
-          .sort((a, b) => b[1] - a[1])
-          .map(([code]) => code)
-          .join(", "),
-        decode_errors: errors,
-        client_codecs: client.supported_encodings.join(", "),
-        h264_status: codecs.has("h264")
-          ? "Receiving H.264"
-          : client.supported_encodings.includes("h264")
-            ? "Supported; waiting for video frames"
-            : !frame.contentWindow.isSecureContext
-              ? "Unavailable: use HTTPS or localhost"
-              : "Unavailable: browser decoder not supported",
+        connected, server_age: age,
+        scaler: filterMode === 'fsr' ? fsr.sample() : {mode: filterMode},
+        codecs: client.codec || info.codec || '—',
+        encoder: info.encoder, capture_path: info.capture_path,
+        decoder: client.decoder, decoder_evidence: client.decoder_evidence,
+        hardware_encoder: info.hardware == null ? undefined : (info.hardware ? 'Yes' : 'No'),
+        zero_copy: info.zero_copy == null ? undefined : (info.zero_copy ? 'Yes' : 'No'),
+        transport: client.transport || 'WebSocket',
       };
-      if (dt > 0) {
-        for (const [field, count] of Object.entries({
-          delivered_fps: "frames",
-          delivered_updates: "updates",
-          decoded_fps: "decodedFrames",
-          decoded_updates: "decoded",
-        }))
-          result[field] = Math.max(0, (current[count] - previous[count]) / dt);
-        result.image_mbps = Math.max(
-          0,
-          ((bytes - previous.bytes) * 8) / dt / 1e6,
-        );
-        result.decode_ms =
-          decodeCount > previous.decodeCount
-            ? (decodeTotal - previous.decodeTotal) /
-              (decodeCount - previous.decodeCount)
-            : 0;
+      // No host CPU/RAM figures: Selkies reports host-wide values, not this container.
+      if (fresh) Object.assign(result, {
+        delivered_fps: latest.encoded_fps, decoded_fps: latest.fps,
+        encode_ms: latest.encode_ms, pipeline_ms: latest.pipeline_ms,
+        roundtrip_ms: latest.rtt_ms, image_mbps: latest.mbps,
+        present_ms: latest.present_ms, frames_not_shown: latest.frames_not_shown,
+      });
+      if (resourceMetrics && Date.now() - resourceAt < 5000) {
+        for (const key of ['game_cpu_percent','stream_cpu_percent','game_rss_mb','game_pss_mb',
+          'stream_rss_mb','stream_pss_mb','container_memory_mb','container_cpu_percent',
+          'gpu_vendor','gpu_renderer','target_hz']) result[key] = resourceMetrics[key];
       }
-      previous = current;
-      const flat = flatten(server);
-      result.server_age = serverAt ? (now - serverAt) / 1000 : null;
-      for (const [key, value] of Object.entries(flat))
-        if (key.startsWith("gamedock."))
-          result[key.slice(9)] =
-            typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value)
-              ? Number(value)
-              : value;
-      for (const [key, pattern] of Object.entries({
-        bandwidth_budget_mbps: /(?:^|\.)bandwidth\.actual$/,
-        bandwidth_window_mbps: /(?:^|\.)window\.\d+\.bandwidth-limit$/,
-      })) {
-        const entry = Object.entries(flat).find(([name]) => pattern.test(name));
-        result[key] = entry ? Number(entry[1]) / 1e6 : null;
-      }
-      const latency = Object.entries(flat).find(([key]) =>
-        /(?:^|\.)damage\.client-latency$/.test(key),
-      );
-      if (latency) result.roundtrip_ms = latency[1];
-      // Request through Xpra's existing connection, only while the caller samples.
-      client.send_info_request();
       return result;
     }
-    return { connect, focus, filter, remotePointer, sample, dispose };
+    return {connect, focus, filter, remotePointer, audio, diagnostics, sample, dispose};
   }
-  return { create };
+  return {create};
 })();

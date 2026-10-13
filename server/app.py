@@ -216,6 +216,8 @@ def validate_profile(data):
     network_policy = validate_policy(
         data.get("network_policy"), data.get("internet_access", False)
     )
+    if type(data.get("pids_limit", 256)) is not int or not 64 <= data.get("pids_limit", 256) <= 16384:
+        raise ValueError("Process/thread limit must be an integer between 64 and 16384")
     validate_resources(data, nullable=True)
     validate_streaming(data.get("streaming", {}))
     validate_gpu(data.get("gpu", {}))
@@ -234,6 +236,7 @@ def validate_profile(data):
             ("max_per_user", 1),
             ("enabled", True),
             ("internet_access", False),
+            ("pids_limit", 256),
             ("memory_mb", None),
             ("cpus", None),
             ("streaming", {}),
@@ -302,7 +305,7 @@ class Docker:
                 "NetworkMode": "container:" + gateway,
                 "Memory": profile["memory_mb"] * 1024**2,
                 "NanoCpus": round(profile["cpus"] * 1_000_000_000),
-                "PidsLimit": 256,
+                "PidsLimit": profile.get("pids_limit", 256),
                 "CapDrop": ["ALL"],
                 "SecurityOpt": ["no-new-privileges:true"],
                 "Mounts": [{"Type": "volume", "Source": volume, "Target": "/data"}],
@@ -494,7 +497,7 @@ async def security(request, handler):
                 await request.json(), dict
             ):
                 raise ValueError("A JSON object is required")
-        token = request.cookies.get("gamedock", "")
+        token = request.cookies.get(request.app["cookie_name"], "")
         if request.headers.get("Authorization", "").startswith("Bearer "):
             token = request.headers["Authorization"][7:]
         request["user"] = None
@@ -685,7 +688,7 @@ async def auth(request):
     )
     response = web.json_response({"user": public_user(row), "token": token})
     response.set_cookie(
-        "gamedock",
+        request.app["cookie_name"],
         token,
         httponly=True,
         samesite="Strict",
@@ -700,7 +703,7 @@ async def logout(request):
     user(request)
     request.app["db"].execute("DELETE FROM tokens WHERE digest=?", (request["digest"],))
     response = web.json_response({"ok": True})
-    response.del_cookie("gamedock", path="/")
+    response.del_cookie(request.app["cookie_name"], path="/")
     return response
 
 
@@ -1056,7 +1059,11 @@ async def proxy(request):
     origin = request.headers.get("Origin")
     if origin and origin != request.app["origin"]:
         raise web.HTTPForbidden(text="Invalid origin")
-    if request.headers.get("Upgrade", "").lower() != "websocket":
+    # Selkies multiplexes video, audio and control on one streaming socket.
+    # File-manager/auxiliary sockets are not viewers. Keep the root path for
+    # existing runtimes during a rolling image migration.
+    streaming = request.match_info.get("tail", "") in ("", "api/websockets")
+    if request.headers.get("Upgrade", "").lower() != "websocket" or not streaming:
         return await desktop_proxy(request)
     app, sid, token = request.app, instance["id"], object()
     # Reserve before any network await. Cleanup and incoming handshakes share a lock.
@@ -1080,25 +1087,6 @@ async def desktop_proxy(request):
         raise web.HTTPForbidden(text="Invalid origin")
     if instance["status"] != "running":
         raise web.HTTPConflict(text="Instance stopped")
-    if (
-        request.method == "GET"
-        and request.match_info.get("tail", "") in ("", "index.html")
-        and request.query.get("floating_menu")
-        != ("true" if config(request.app)["desktop_toolbar"] else "false")
-        and request.headers.get("Upgrade", "").lower() != "websocket"
-    ):
-        return web.Response(
-            status=302,
-            headers={
-                "Location": str(
-                    request.rel_url.update_query(
-                        floating_menu="true"
-                        if config(request.app)["desktop_toolbar"]
-                        else "false"
-                    )
-                )
-            },
-        )
     info = await request.app["docker"].inspect(instance["id"])
     if not info or not info["State"]["Running"]:
         raise web.HTTPGone(text="The desktop has stopped")
@@ -1158,14 +1146,18 @@ async def desktop_proxy(request):
             for p in request.headers.get("Sec-WebSocket-Protocol", "").split(",")
             if p.strip()
         ]
+        # The streaming backend owns heartbeat and RTT measurement. Acknowledging
+        # control frames here would measure only the backend-to-portal hop.
         async with http.ws_connect(
-            target, protocols=protocols, max_msg_size=16 * 1024**2
+            target, protocols=protocols, max_msg_size=16 * 1024**2, autoping=False
         ) as upstream:
             downstream = web.WebSocketResponse(
-                protocols=protocols, max_msg_size=16 * 1024**2, heartbeat=10
+                protocols=protocols, max_msg_size=16 * 1024**2, autoping=False
             )
             await downstream.prepare(request)
-            request.app["viewers"][instance["id"]].ever_seen = True
+            presence = request.app["viewers"].get(instance["id"])
+            if presence and request.match_info.get("tail", "") in ("", "api/websockets"):
+                presence.ever_seen = True
 
             async def pump(source, dest):
                 async for message in source:
@@ -1183,6 +1175,10 @@ async def desktop_proxy(request):
                         await dest.send_bytes(message.data)
                     elif message.type == aiohttp.WSMsgType.TEXT:
                         await dest.send_str(message.data)
+                    elif message.type == aiohttp.WSMsgType.PING:
+                        await dest.ping(message.data)
+                    elif message.type == aiohttp.WSMsgType.PONG:
+                        await dest.pong(message.data)
                 await dest.close()
 
             async def revocation():
@@ -1286,7 +1282,7 @@ async def expire_idle(app, now=None):
 
 
 async def query_viewers(app, sid):
-    """Internal-only, bounded, cheap snapshot. Never query full Xpra metrics."""
+    """Internal-only, bounded, cheap snapshot. Never query full streaming diagnostics."""
     info = await app["docker"].inspect(sid)
     if not info or not info["State"]["Running"]:
         raise DesktopStopped()
@@ -1534,6 +1530,10 @@ def create_app(db_path=None, docker=None):
         b"".join(name.encode() + b"\0" + data for name, data in files.items())
     ).hexdigest()
     app["origin"] = os.getenv("PUBLIC_URL", "http://localhost:8080").rstrip("/")
+    cookie_name = os.getenv("GAMEDOCK_SESSION_COOKIE", "gamedock")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", cookie_name):
+        raise ValueError("Invalid session cookie name")
+    app["cookie_name"] = cookie_name
     path = db_path or os.getenv("DATABASE", "/data/gamedock.sqlite")
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)

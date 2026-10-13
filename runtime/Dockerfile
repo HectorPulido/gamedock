@@ -1,24 +1,15 @@
-FROM fedora:43
-COPY xpra.repo /etc/yum.repos.d/xpra.repo
-RUN dnf install -y --setopt=install_weak_deps=False xpra xpra-html5 xpra-x11 gobject-introspection xorg-x11-server-Xvfb xdpyinfo openbox xterm liberation-mono-fonts python3 && dnf clean all && useradd --uid 1000 --create-home player
-RUN dnf install -y --setopt=install_weak_deps=False glx-utils mesa-dri-drivers mesa-libGL mesa-libEGL && dnf clean all
-COPY patch-xpra-bandwidth.py /tmp/patch-xpra-bandwidth.py
-RUN python3 /tmp/patch-xpra-bandwidth.py && rm /tmp/patch-xpra-bandwidth.py
-COPY patch-xpra-idle.py /tmp/patch-xpra-idle.py
-RUN python3 /tmp/patch-xpra-idle.py && rm /tmp/patch-xpra-idle.py
-COPY patch-xpra-visibility.py /tmp/patch-xpra-visibility.py
-RUN python3 /tmp/patch-xpra-visibility.py && rm /tmp/patch-xpra-visibility.py
-COPY patch-xpra-batching.py /tmp/patch-xpra-batching.py
-RUN python3 /tmp/patch-xpra-batching.py && rm /tmp/patch-xpra-batching.py
-COPY gamedock_presence.py patch-xpra-presence.py /tmp/
-RUN python3 /tmp/patch-xpra-presence.py && rm /tmp/patch-xpra-presence.py /tmp/gamedock_presence.py
-COPY gamedock_metrics.py patch-xpra-metrics.py /tmp/
-RUN python3 /tmp/patch-xpra-metrics.py && rm /tmp/patch-xpra-metrics.py /tmp/gamedock_metrics.py
-COPY gamepad.py streaming.py gpu.py /usr/local/bin/
+# Pinned Selkies 2.0 runtime, including the DRI3-capable Xvfb/pixelflux stack.
+FROM ghcr.io/linuxserver/baseimage-selkies:debiantrixie@sha256:357a816d5cd92d18e6448640cfdca8938aff481a5e0622d1bcd3f84595225673
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends xterm mesa-utils libxtst6 libx11-6 fonts-liberation python3-evdev && rm -rf /var/lib/apt/lists/*
+# The base reserves UID 1000 under another name. GameDock's contract is numeric.
+RUN mkdir -p /data /home/player /tmp/.X11-unix && chown 1000:1000 /data /home/player && chmod 1777 /tmp/.X11-unix
+COPY patch-selkies-sessions.py /opt/gamedock/patch-selkies-sessions.py
+RUN /lsiopy/bin/python /opt/gamedock/patch-selkies-sessions.py
+COPY gamepad.py streaming.py gpu.py gamedock_metrics.py selkies_gateway.py /usr/local/bin/
 COPY entrypoint.py /usr/local/bin/gamedock-runtime
-RUN chmod 755 /usr/local/bin/gamedock-runtime && mkdir /data && chown player:player /data && mkdir -p /tmp/.X11-unix && chmod 1777 /tmp/.X11-unix && printf 'XTerm*renderFont: true\nXTerm*faceName: Liberation Mono\n' > /home/player/.Xdefaults && chown player:player /home/player/.Xdefaults
-USER player
-ENV HOME=/home/player DISPLAY=:0 XDG_RUNTIME_DIR=/tmp/gamedock-runtime
+ENV HOME=/home/player DISPLAY=:0 XDG_RUNTIME_DIR=/tmp/gamedock-runtime PATH=/lsiopy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin START_DOCKER=false
+USER 1000:1000
 EXPOSE 6084
 ENTRYPOINT ["python3", "/usr/local/bin/gamedock-runtime"]
 CMD ["xterm"]

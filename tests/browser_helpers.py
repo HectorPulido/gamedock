@@ -40,13 +40,18 @@ def rendered(page, colors=3):
     while time.monotonic() < deadline:
         frame = page.locator("#desktop-frame").element_handle().content_frame()
         try:
-            if frame and frame.locator("canvas").count():
+            if frame and frame.locator("canvas,video").count():
                 frame.wait_for_function(
-                    """minimum => [...document.querySelectorAll('canvas')].some(c => {
-                  if(c.width < 640 || c.height < 480) return false;
-                  const ctx=c.getContext('2d'); if(!ctx) return false;
-                  const data=ctx.getImageData(0,0,c.width,c.height).data; const colors=new Set();
-                  for(let i=0;i<data.length;i+=160) if(data[i+3]) colors.add(data.slice(i,i+4).join(','));
+                    """minimum => [...document.querySelectorAll('canvas:not(.fsr-overlay),video')].some(source => {
+                  const w=source.videoWidth || source.width, h=source.videoHeight || source.height;
+                  if(w < 320 || h < 240 || source.getBoundingClientRect().width <= 0) return false;
+                  // Reading through a scratch canvas works for WebGL, transferred
+                  // canvases and video sinks without changing their context type.
+                  const probe=document.createElement('canvas'); probe.width=160;probe.height=90;
+                  const ctx=probe.getContext('2d'); if(!ctx) return false;
+                  try {ctx.drawImage(source,0,0,160,90);} catch {return false;}
+                  const data=ctx.getImageData(0,0,160,90).data; const colors=new Set();
+                  for(let i=0;i<data.length;i+=16) if(data[i+3]) colors.add(data.slice(i,i+4).join(','));
                   return colors.size>minimum;
                 })""",
                     arg=colors,

@@ -22,8 +22,7 @@ The default does not enable a software Vulkan renderer or accelerate 2D drawing.
 
 The base runtime remains CPU-only by default. GPU images add VirtualGL, Mesa,
 GLVND and OpenGL/Vulkan diagnostic tools. They keep the existing unprivileged
-`player` user, Xvfb display and Xpra streaming. Only the game is wrapped with
-VirtualGL's EGL backend; Xpra and the window manager are not. VirtualGL's proxy
+UID/GID 1000:1000, Xvfb display and Selkies streaming. NVIDIA games use VirtualGL's EGL backend; AMD/Intel can use native DRI3/GLAMOR. VirtualGL's proxy
 transport does not introduce a second lossy compression step.
 
 This accelerates compatible **GLX/OpenGL games**. It does not turn every 2D game,
@@ -32,9 +31,11 @@ Native Vulkan or Wine/DXVK presentation requires separate application-specific
 validation. Installing Vulkan tools is not a claim that Vulkan display works.
 Legacy 32-bit games require matching 32-bit VirtualGL and graphics libraries;
 these variants include the native-architecture libraries only.
-Xpra video encoding is separate: selecting a GPU here does not automatically
-activate NVENC, VAAPI or another hardware video encoder. There is no VRAM quota
-or exclusive GPU reservation; sessions using the same device share its resources.
+Video encoding is separate from rendering. Selkies/pixelflux can select VAAPI or
+NVENC when supported by the selected device, libraries and host drivers. Verify
+the actual encoder in Diagnostics/logs; mapping a GPU alone proves nothing about
+encoding. There is no VRAM quota or exclusive reservation: sessions share GPU
+resources. AMD/Intel use native DRI3/GLAMOR when supported; NVIDIA uses VirtualGL.
 
 ## NVIDIA host
 
@@ -92,7 +93,7 @@ matching GPU runtime, install/copy the game, and set its normal command:
 FROM gamedock-runtime-gpu-amd:local
 USER root
 # Install your game's dependencies and files here.
-USER player
+USER 1000:1000
 CMD ["/opt/my-game/start"]
 ```
 
@@ -124,7 +125,7 @@ docker exec gamedock-<instance-id> cat /tmp/gamedock-runtime/gpu.json
 docker compose -p gamedock-gpu-demo -f examples/gpu/compose.yaml down
 ```
 
-Demo Xpra ports are unauthenticated and bound to localhost for testing. Use the
+Demo Selkies ports are unauthenticated and bound to localhost for testing. Use the
 GameDock portal's authenticated sessions for players.
 
 ## Validation limits

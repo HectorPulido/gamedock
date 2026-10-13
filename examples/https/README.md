@@ -23,25 +23,19 @@ The directory mounts read-only. No keys are stored in Git. Restart the portal
 after certificate renewal. The container health check skips certificate
 verification **only for its loopback request**; browsers must trust the certificate.
 
-HTTPS enables access to WebCodecs, but does not guarantee that a particular
-browser supports H.264. Diagnostics show the browser codec list, actual received
-codecs, decoding errors, and the reason H.264 is unavailable. JPEG/WebP remain
-fallbacks. GameDock advertises the session's source dimensions as the maximum
-video size, rather than Xpra HTML5's old 1024×768 default. Lossless PNG profiles
-continue to exclude H.264.
+HTTPS enables WebCodecs but does not guarantee browser H.264 support. Inspect the
+actual codec and decoder in Diagnostics. JPEG remains the compatibility fallback.
+The WebSocket transport does not require WebRTC or extra UDP ports.
 
 ## Bandwidth and process accounting
 
-The fixed Mbps value is an Xpra encoding budget per viewer. The runtime patches
-Xpra 6.5.4's HTML5 capability mismatch, zero/unlimited negotiation, and loss of a
-fixed budget when no congestion is measured. Both the negotiated and per-window
-budgets remain bounded when bandwidth detection is enabled or disabled.
-This is adaptive quality/batching, **not a strict transport traffic shaper**.
-Images, refresh frames and protocol overhead can cause bursts. Measure sustained
-traffic from an external client; do not infer network throughput from FPS alone.
+The Mbps value is an encoder target, not a strict traffic shaper. Complex frames,
+audio and protocol overhead can produce bursts. Measure sustained traffic from
+a real client; FPS alone does not establish bandwidth or latency. Xpra batching
+and capability patches no longer apply. See [migration notes](../../docs/selkies-migration.md).
 
 Game processes include Wine processes adopted by PID 1 in the dedicated game
-container. Xpra and its children, Xvfb and openbox are streaming overhead. Runtime,
+container. Selkies and its children, Xvfb, PulseAudio and openbox are streaming overhead. Runtime,
 init and Docker exec process trees are excluded. The game group includes the
 launcher and Wine services as well as the executable. RSS sums may count shared
 pages more than once; PSS apportions shared pages. Container cgroup memory also
@@ -54,7 +48,6 @@ Runtime changes apply to newly created game containers after rebuilding their
 images. Refresh an open player page for frontend changes. Existing game containers
 are never patched in place.
 
-Run `./scripts/qa-streaming.sh` for the isolated HTTPS/H.264 check. It creates a
-short-lived self-signed test certificate, which only the QA browser accepts.
-The check uses a separate client container; it does not replace a real external
-client/network test.
+Run `./scripts/qa-streaming.sh` for current Selkies contract checks. A real
+HTTPS browser decoder test and external-network acceptance run remain necessary
+on the deployment host; contract tests do not measure those paths.

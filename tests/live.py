@@ -62,7 +62,7 @@ assert api("/catalog")["settings"]["name"] == "GameDock QA"
 profile = {
     "id": "qa-native",
     "name": "QA native program",
-    "image": "gamedock-runtime:local",
+    "image": os.getenv("QA_RUNTIME_IMAGE", "gamedock-runtime:local"),
     "command": [
         "xterm",
         "-title",
@@ -156,14 +156,14 @@ with tempfile.TemporaryDirectory() as directory:
                         body = response.read()
                         if response.headers.get("Content-Encoding") == "gzip":
                             body = gzip.decompress(body)
-                        assert b"xpra" in body.lower()
+                        assert b"selkies" in body.lower()
                         break
                 except urllib.error.HTTPError as error:
                     if error.code != 503:
                         raise
                 time.sleep(0.5)
             else:
-                raise AssertionError("Xpra HTTP viewer not ready")
+                raise AssertionError("Selkies HTTP viewer not ready")
             req = urllib.request.Request(
                 URL + "/desktop/" + sid + "/",
                 headers={"Authorization": "Bearer " + other},
@@ -295,7 +295,7 @@ with tempfile.TemporaryDirectory() as directory:
             retained.strip() == "retained"
         ), "Game files lost after replacing instance"
         print(
-            "PASS: CLI registration, native command, two desktops, two actual resolutions, persistent data, Xpra HTTP, cross-user denial, no published session ports"
+            "PASS: CLI registration, native command, two desktops, two actual resolutions, persistent data, Selkies HTTP, cross-user denial, no published session ports"
         )
     finally:
         for sid in ids:

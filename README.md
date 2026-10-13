@@ -7,7 +7,7 @@ Includes registration, sign-in and sign-out, a bootstrap administrator, an edita
 game catalog, platform name and banners, per-game resolutions, global and per-user
 limits, account management, instance termination, and a CLI. Each instance runs a
 command in its own container. The portal authenticates HTTP and WebSocket access
-to Xpra; session containers do not publish ports to the host.
+to Selkies; session containers do not publish ports to the host.
 
 ## Screenshots
 
@@ -107,7 +107,7 @@ server and `--credentials` to maintain separate sessions.
 ## Add a game
 
 Derive an image from `gamedock-runtime:local`, install the program, and keep the
-`player` user (UID 1000). The working directory is `/data`, persisted per account
+UID/GID 1000:1000 (use numeric `USER` and `COPY --chown`). The working directory is `/data`, persisted per account
 and game. As an administrator, choose **Administration → Games → Add game** to open a
 new JSON template. Give it a unique `id`, set its name, installed Docker image,
 launch command, resolutions, and limits, then click **Save game**. Click **Edit**
@@ -147,10 +147,14 @@ platform supports a welcome message and a banner image. Launch commands, images,
 and environment variables are visible only to administrators. Do not use profile
 environment variables to store individual users' secrets.
 
-The runtime uses Xvfb, Openbox, and Xpra without audio. It supports X11 applications
-and games compatible with software rendering. GPU access, controllers, audio,
-anti-cheat, and 3D acceleration require adapting the image and device policy;
-compatibility with every game is not guaranteed. Initial per-session limits are 4 GiB of RAM, 2 CPUs, and 256 processes.
+The runtime uses pinned Debian Selkies, a DRI3-capable Xvfb, Openbox and
+PulseAudio. Video and audio use authenticated same-origin WebSockets, without
+WebRTC, UDP ports or TURN. H.264 uses browser WebCodecs in a secure context;
+JPEG is the compatibility fallback. Software rendering and encoding work without
+a GPU. Optional GPU profiles enable hardware paths where supported. Compatibility
+with every game, anti-cheat and audio backend is not guaranteed. Initial limits
+are 4 GiB RAM, 2 CPUs and 256 processes/threads per session.
+
 Administrators can change RAM and CPU under **Administration → Platform →
 Session resources**. RAM is entered in MiB (1024 MiB = 1 GiB); CPU accepts fractions
 such as 0.5 or 0.75. Each game's editor also has **Game RAM** and **Game CPU**
@@ -168,7 +172,7 @@ docker build -t gamedock-openttd:local examples/openttd
 ./bin/gamedock launch openttd --resolution 1280x720
 ```
 
-Includes the free game and OpenGFX graphics from Fedora repositories, without
+Includes the free game and OpenGFX graphics from Debian repositories, without
 requiring commercial client files. Configuration and saved games are stored in
 `/data`. `./bin/gamedock` accepts all CLI commands listed above.
 
@@ -210,12 +214,11 @@ the game running. Stopping an instance requires confirmation and preserves its
 saved files. Stopped instances are hidden from the library; history remains in
 the API and database.
 
-Use **Administration → Platform → Show desktop toolbar** to show or hide
-Xpra's floating controls. Changes apply to open viewers within 15 seconds and do
-not require rebuilding images or restarting games. `DESKTOP_TOOLBAR` in
-`server/app.py` supplies the initial default when no administrator preference has
-been saved. Hiding the toolbar changes the interface, not the underlying Xpra
-features.
+The Selkies sidebar is hidden. GameDock settings expose browser presentation,
+local sound playback, controller preferences and diagnostics. Players cannot
+change encoder, bitrate, capture FPS or game resolution through this dialog.
+Administrators configure those centrally for new sessions. The legacy toolbar
+preference remains readable but does not expose Selkies technical controls.
 
 ### Platform name and appearance
 
@@ -286,14 +289,10 @@ to one worker interval after the grace expires, plus container cleanup time.
 Administration → Instances shows viewer count (or **unknown**), time without a
 viewer, first-viewer wait and any pending stop.
 
-Runtime images must include `patch-xpra-presence.py` and the updated controller
-service. Xpra publishes only open UI-client presence once a second; the portal
-reads a small internal snapshot at startup/reconciliation or before expiry,
-without running `xpra info`. A runtime that cannot verify presence stays **unknown**
-and is retried, never stopped by this policy. On portal restart, presence is
-reconciled and sessions receive a fresh grace period. Snapshot reads run outside
-the launch lock; generation checks discard observations made across a connection
-change, and the final check and stop share the lock with incoming handshakes.
+Rebuilt Selkies images publish viewer presence through their internal gateway.
+Unverifiable runtime presence stays **unknown** and cleanup retries rather than
+stopping a possibly connected game. Portal restarts grant a fresh grace period.
+Incoming handshakes and final cleanup share the launch lock to prevent races.
 
 Automatic stop uses the ordinary container stop/removal path and preserves named
 volumes. Unsaved game state can be lost, just as with manual Stop. No pause or
@@ -392,7 +391,7 @@ manage all instances.
 
 ## Validation
 
-Run the complete suite on Linux using only the dedicated Docker QA project:
+Run the current migration checks in Docker:
 
 ```sh
 ./scripts/qa.sh
@@ -409,25 +408,12 @@ docker build -t gamedock-portal:local .
 docker run --rm -v "$PWD:/app:ro" gamedock-portal:local python -m unittest discover -s tests -v
 ```
 
-`tests/live.py` checks the API and CLI, native commands, two real desktops, Xvfb
-resolutions, persistence, proxying, isolation, and port exposure. Run it on the
-host with Python 3 and the Docker CLI against a disposable QA deployment at
-localhost:18088. It reads bootstrap credentials from `/tmp/gamedock-qa.env`.
-Do not run it against real accounts. `tests/browser.py` checks registration,
-launching, rendered desktop pixels, real keyboard input, WebSocket revocation,
-termination, and mobile layout. `tests/game_browser.py` checks administration
-forms, game creation, invitations, player access, live toolbar settings, and a
-real OpenTTD session. `tests/idle_live.py` verifies the actual inactivity worker
-against a Docker instance with a one-minute timeout. Build the browser environment
-with `tests/Dockerfile.browser`; screenshots are written to `/artifacts`. The QA
-portal uses `PUBLIC_URL=http://gamedock-qa-portal-1:8080`, passed to the browser as
-`QA_URL`; the QA CLI connects through loopback:18088.
-
-`tests/customization_browser.py` verifies public branding, all three themes,
-preview isolation, logo and CSS, appearance import/export, inherited and per-game
-resource limits in actual Docker containers, mouse/keyboard through an enlarged
-viewer, fixed Xvfb resolution, fullscreen entry/exit, and mobile layout. It uses
-the same disposable QA deployment and browser environment as the other suites.
+`tests/live.py` checks API/CLI ownership, persistence, source resolutions,
+authenticated desktop access and portal recreation against disposable data.
+Historical browser fixtures with Xpra-specific assumptions are not Selkies
+acceptance evidence. See [validation status](VALIDATION.md) and the migration
+guide for current checks and remaining real-browser/hardware/load coverage.
+Never run destructive QA against real player data.
 
 ### Administrator workspace
 
@@ -437,39 +423,22 @@ The workspace separates **Access**, **Games**, **Platform**, **Appearance**, and
 
 ### Streaming quality and responsiveness
 
-Open **Administration → Streaming** to adjust picture quality, capture rate,
-bandwidth, compression, codecs, shared-memory capture and input latency. The
-27 controls include all optimizations adapted from Dofus: short frame queues,
-immediate TCP delivery, XSHM capture and recovery after browser inactivity.
-Encoder downscaling is disabled by default. Expanding the viewer still leaves
-the game resolution unchanged.
-
-Presets fill the form without saving: **Balanced**, **Sharp picture**, **Dofus
-low latency**, and **Lossless picture**. Save to use the chosen values for new
-instances. Active instances keep their original configuration. Codec choices
-are negotiated with the browser; explicit encoder choices require those codecs
-in the runtime image. Lossless PNG/RGB preserves detail but uses more bandwidth.
-
-Game profiles can override individual values in their JSON definition:
+Open **Administration → Streaming** to configure FPS, bitrate, codec/rate control,
+CRF/JPEG quality and audio. Per-game `streaming` overrides platform defaults.
+API settings writes merge values; game writes replace overrides. For example:
 
 ```json
-"streaming": {
-  "quality": 95,
-  "min_quality": 85,
-  "refresh_rate": 30,
-  "bandwidth_mbps": 0
-}
+"streaming": {"refresh_rate": 30, "bandwidth_mbps": 4}
 ```
 
-An empty `streaming` object inherits all platform defaults. API writes to
-`/api/admin/settings` merge `streaming` values; game profile writes replace their
-overrides. Quality and speed use 0 for automatic adjustment; bandwidth uses
-0 for no fixed limit. Queue values must satisfy minimum ≤ initial ≤ maximum.
-
-Rebuild `gamedock-runtime:local` and game images derived from it when upgrading
-the runtime. Merely rebuilding the portal cannot update Xpra inside an existing
-image. The idle recovery patch checks its source targets during the build and
-fails explicitly if a future Xpra version needs a different patch.
+The runtime passes fixed limits to Selkies and rejects browser requests to alter
+technical settings. Bitrate is an encoder target, not a strict traffic shaper.
+Zero legacy bandwidth maps to the default Selkies budget, not unlimited traffic.
+Legacy Xpra quality/batching/codec keys remain readable for migration but are
+ignored. Rebuild runtime and derived game images, then relaunch sessions;
+updating only the portal does not replace existing game containers.
+See [migration notes](docs/selkies-migration.md). This integration has no
+game-specific server dependencies and does not configure host KSM.
 
 ### Floating notifications
 
@@ -486,7 +455,7 @@ The player offers fit, original-size and integer scaling, plus FSR 1, Smooth and
 Sharp canvas filters. FSR 1 is the default for new settings; saved explicit filter
 preferences remain unchanged. Server defaults resets the browser preference.
 
-FSR 1 runs AMD's EASU and RCAS passes using WebGL 2 after Xpra decodes the image.
+FSR 1 runs AMD's EASU and RCAS passes using WebGL 2 after Selkies decodes the image.
 Only the presentation canvas grows to the player's viewport; game resolution and
 transmitted video stay unchanged. The OpenTTD example defaults to 960×540 and
 also offers 1280×720 and 1920×1080. Other game profiles are not migrated.
@@ -500,15 +469,13 @@ Administration → Streaming sets defaults, automatic keyboard-focus recovery,
 diagnostics availability and the sample interval (1–10 seconds). Viewer scale
 and filter choices are remembered locally; Server defaults resets them.
 
-Open Diagnostics to compare successful capture reads, capture-loop frequency,
-received Xpra frame boundaries and decode acknowledgements. Partial updates are
-counted separately; these are transmission measurements, not game-engine FPS.
-A static screen may legitimately send few updates. Image Mbps and projected
-GB/hour count image payload only, excluding audio, protocol and TLS overhead.
-CPU separates game processes from Xpra/display processes; 100% is one core.
-Memory sums process RSS and may count shared pages more than once. Statistics
-requests stop when the panel closes or the tab is hidden. Capture instrumentation
-requires a newly launched instance from the rebuilt runtime image.
+Diagnostics distinguishes decoded stream FPS, encoded FPS, encode/pipeline time,
+RTT, codec/encoder and payload Mbps. These are not native game FPS. Selkies host
+resource counters are not labeled as per-container game usage. The authenticated
+runtime metrics endpoint separately reports game/display processes and cgroup
+usage. RSS can double-count shared pages; PSS apportions them; cgroup memory also
+includes cache/kernel memory. Statistics polling stops when diagnostics closes
+or the browser tab is hidden. A short sample is not a capacity guarantee.
 
 Portal HTML references a single content-versioned CSS/JS bundle frozen at startup.
 Versioned assets are immutable; unavailable old versions return 410 and require
@@ -539,11 +506,3 @@ For HTTPS / browser H.264 decoding, effective bandwidth budgets and Wine process
 accounting, see [streaming deployment notes](examples/https/README.md).
 
 Controllers: [mobile touch overlay and USB/Bluetooth setup](examples/controllers/README.md).
-
-Batching and capture rate can be configured separately in Administration → Streaming.
-`batch_match_refresh` defaults to `true` (recommended): at 30 Hz, a configured
-5 ms minimum becomes an effective 33 ms minimum. Disable **Match batching to
-capture rate** to keep `batch_min_delay` independent; the capture target and
-GStreamer frame rate still follow `refresh_rate`. A smaller queue is not always
-faster: it can increase CPU, encoding work and traffic. Changes apply to new
-sessions and require runtime images containing the batching patch.
