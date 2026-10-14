@@ -371,3 +371,18 @@ retaining the game volume to verify persistence.
   Explicit WebGL context loss triggers the tested Smooth fallback.
 - Comparison artifacts: `/tmp/gamedock-streaming-artifacts/xpra-540-smooth.png`,
   `xpra-540-crisp.png`, `xpra-540-fsr.png` and `fsr-colors.png`.
+
+
+## Selkies backpressure FPS recovery
+
+- The pinned Selkies 2.0.0 estimator previously sampled ACK progress over an
+  interval that could include server-imposed throttling. Reopening the stream
+  could lower estimated client FPS and progressively tighten its own queue limit.
+- The runtime adapter excludes gated intervals and the first recovery boundary
+  from the estimate. Healthy slower clients still scale the bounded queue.
+- `python3 -m unittest tests.test_selkies_estimator` uses the native method AST
+  fixture: recovery stays at 30 FPS instead of decaying to 21.2; a healthy 12 FPS
+  client still converges to 12. It also checks uint16 wrap, idle samples, stale
+  live-upgrade state, and rejection of unknown/already-patched source contracts.
+- This fixes estimator feedback; it does not establish a WAN throughput guarantee
+  or eliminate real network congestion and slow browser decoding.
