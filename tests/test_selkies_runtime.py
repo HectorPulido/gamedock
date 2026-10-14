@@ -6,6 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from aiohttp import WSServerHandshakeError, WSMsgType, web
 from aiohttp.test_utils import TestClient, TestServer
@@ -52,6 +53,17 @@ class Gateway(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.headers['Cache-Control'], 'no-store')
         response = await self.client.get('/%2e%2e/etc/passwd')
         self.assertEqual(response.status, 404)
+
+    async def test_administrator_dashboard_is_not_hidden_by_gateway(self):
+        with patch.dict('os.environ', {'GAMEDOCK_ADMIN_SESSION':'1'}):
+            app = application(self.root, self.root)
+        client = TestClient(TestServer(app))
+        await client.start_server()
+        try:
+            html = await (await client.get('/')).text()
+            self.assertNotIn('.sidebar,.toggle-handle', html)
+        finally:
+            await client.close()
 
     async def test_only_streaming_websocket_is_a_presence_lease(self):
         response = await self.client.get('/api/health')

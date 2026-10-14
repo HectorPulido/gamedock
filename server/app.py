@@ -180,6 +180,7 @@ def validate_profile(data):
             "XDG_RUNTIME_DIR",
             "GAMEDOCK_RESOLUTION",
             "GAMEDOCK_STREAMING",
+            "GAMEDOCK_ADMIN_SESSION",
             "GAMEDOCK_GPU",
             "GAMEDOCK_GPU_VENDOR",
             "NVIDIA_VISIBLE_DEVICES",
@@ -294,7 +295,9 @@ class Docker:
                     }
                 ),
             ]
-            + [k + "=" + v for k, v in profile["env"].items()],
+            + [k + "=" + v for k, v in profile["env"].items()
+               if k != "GAMEDOCK_ADMIN_SESSION"]
+            + ["GAMEDOCK_ADMIN_SESSION=" + ("1" if profile.get("_admin_session") is True else "0")],
             "Labels": {
                 "io.gamedock.managed": "true",
                 "io.gamedock.session": sid,
@@ -840,6 +843,9 @@ async def instances(request):
         profile["streaming"] = validate_streaming(
             {**cfg["streaming"], **profile.get("streaming", {})}, complete=True
         )
+        # Launch authority comes only from the authenticated account, never
+        # request JSON or a stored game profile. This metadata is not persisted.
+        profile["_admin_session"] = bool(u["admin"])
         sid = secrets.token_hex(16)
         app["db"].execute(
             "INSERT INTO instances(id,uid,game,resolution,status,created,last_activity) VALUES (?,?,?,?,?,?,?)",
@@ -1110,9 +1116,11 @@ async def desktop_proxy(request):
         query_string=request.query_string,
     )
     http = request.app["http"]
-    if request.method == "POST":
-        if tail != "gamedock-controller":
-            raise web.HTTPNotFound()
+    native_api = (tail.startswith("api/") and bool(request["user"]["admin"])
+                  and instance["uid"] == request["user"]["id"])
+    if request.method not in ("GET", "HEAD") and tail != "gamedock-controller" and not native_api:
+        raise web.HTTPForbidden(text="Native desktop settings require administrator access")
+    if request.method == "POST" and tail == "gamedock-controller":
         if request.content_type != "application/json":
             raise web.HTTPUnsupportedMediaType(text="JSON is required")
         body = await request.json()
@@ -1219,7 +1227,11 @@ async def desktop_proxy(request):
                 await downstream.close()
             return downstream
     try:
-        async with http.get(target, allow_redirects=False) as upstream:
+        async with http.request(
+            request.method, target, allow_redirects=False,
+            data=await request.read() if native_api and request.method not in ("GET", "HEAD") else None,
+            headers={"Content-Type": request.headers["Content-Type"]} if "Content-Type" in request.headers else {},
+        ) as upstream:
             body = await upstream.read()
             headers = {
                 k: v
@@ -1624,7 +1636,7 @@ def create_app(db_path=None, docker=None):
     app.router.add_get("/api/admin/users", admin_users)
     app.router.add_patch("/api/admin/users/{uid}", admin_users)
     app.router.add_post("/desktop/{sid}/gamedock-controller", proxy)
-    app.router.add_get("/desktop/{sid}/{tail:.*}", proxy)
+    app.router.add_route("*", "/desktop/{sid}/{tail:.*}", proxy)
     app.router.add_get("/", platform_page)
     app.router.add_get("/admin", admin_page)
     app.router.add_get("/admin/", admin_page)

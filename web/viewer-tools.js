@@ -3,6 +3,7 @@ window.GameDockViewer = (() => {
   function create(frame) {
     const fsr = GameDockFSR.create(frame);
     let filterMode = 'smooth', connectedWindow, renderTimer, diagnosticsOpen = false;
+    let nativePanelAllowed = false, nativePanelOpen = false, nativePanelPending = false;
     let volume = 1, muted = false, resourceMetrics, resourceAt = 0, resourcePending = false;
     function post(type, options = {}) {
       frame.contentWindow?.postMessage({type, ...options}, location.origin);
@@ -25,10 +26,28 @@ window.GameDockViewer = (() => {
         post('setVolume', {value: volume});
         post('setMute', {value: muted});
         post('statsOpen', {open: diagnosticsOpen});
-        stylesheet('gamedock-vendor-ui', '.sidebar,.toggle-handle{display:none!important;pointer-events:none!important}');
+        applyNativePanel();
 
       }
+      if (nativePanelPending) applyNativePanel();
       return true;
+    }
+    function applyNativePanel() {
+      const show = nativePanelAllowed && nativePanelOpen;
+      stylesheet('gamedock-vendor-ui', show ? '' : '.sidebar,.toggle-handle{display:none!important;pointer-events:none!important}');
+      const sidebar = frame.contentDocument?.querySelector('.sidebar');
+      if (sidebar && show !== sidebar.classList.contains('is-open'))
+        post('toggleDashboard');
+    }
+    function allowNativePanel(allowed) {
+      nativePanelAllowed = allowed === true;
+      if (!nativePanelAllowed) nativePanelOpen = false;
+      applyNativePanel();
+    }
+    function showNativePanel(open) {
+      nativePanelOpen = nativePanelAllowed && open === true;
+      nativePanelPending = nativePanelOpen;
+      applyNativePanel();
     }
     function dispose() {
       clearInterval(renderTimer); renderTimer = undefined;
@@ -103,7 +122,7 @@ window.GameDockViewer = (() => {
       }
       return result;
     }
-    return {connect, focus, filter, remotePointer, audio, diagnostics, sample, dispose};
+    return {connect, focus, filter, remotePointer, audio, diagnostics, sample, dispose, allowNativePanel, showNativePanel};
   }
   return {create};
 })();

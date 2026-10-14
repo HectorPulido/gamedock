@@ -608,6 +608,61 @@ class API(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(next(game for game in stored["games"]
                 if game["id"] == profile["id"])["pids_limit"], valid)
 
+    async def test_native_api_mutations_require_admin_and_owned_instance(self):
+        from aiohttp import web
+        admin = await self.login("admin", "login")
+        alice = await self.login()
+        sids = []
+        for headers in (admin, alice):
+            response = await self.client.post("/api/instances", headers=headers, json={"game": "desktop"})
+            sids.append((await response.json())["id"])
+        received = []
+        async def endpoint(request):
+            received.append((request.method, await request.text()))
+            return web.json_response({"ok": True})
+        upstream = web.Application()
+        upstream.router.add_route("*", "/api/test", endpoint)
+        server = TestServer(upstream)
+        await server.start_server()
+        self.addAsyncCleanup(server.close)
+        self.docker.ensure_connection = AsyncMock()
+        for sid in sids:
+            self.docker.active[sid]["NetworkSettings"] = {"Networks": {
+                "gamedock-session-" + sid: {"IPAddress": "127.0.0.1"}}}
+        original = self.app["http"].request
+        self.app["http"].request = lambda method, url, **kw: original(method, url.with_port(server.port), **kw)
+        for method in ("POST", "PUT", "DELETE"):
+            response = await self.client.request(method, "/desktop/" + sids[0] + "/api/test",
+                headers=admin, json={"setting": "changed"})
+            self.assertEqual(response.status, 200)
+            self.assertEqual(received[-1][0], method)
+            self.assertEqual(json.loads(received[-1][1]), {"setting": "changed"})
+            response = await self.client.request(method, "/desktop/" + sids[1] + "/api/test", headers=alice, json={})
+            self.assertEqual(response.status, 403)
+            response = await self.client.request(method, "/desktop/" + sids[0] + "/api/test", headers=alice, json={})
+            self.assertEqual(response.status, 404)
+        response = await self.client.post("/desktop/" + sids[1] + "/api/test", headers=admin, json={})
+        self.assertEqual(response.status, 403)
+        response = await self.client.post("/desktop/" + sids[0] + "/api/test",
+            headers={**admin, "Origin": "https://evil.invalid"}, json={})
+        self.assertEqual(response.status, 403)
+        self.assertEqual(len(received), 3)
+
+    async def test_native_stream_settings_admin_authority(self):
+        admin = await self.login("admin", "login")
+        alice = await self.login()
+        for headers, expected in ((admin, True), (alice, False)):
+            response = await self.client.post("/api/instances", headers=headers,
+                json={"game": "desktop", "_admin_session": True,
+                      "env": {"GAMEDOCK_ADMIN_SESSION": "1"}})
+            self.assertEqual(response.status, 201)
+            sid = (await response.json())["id"]
+            self.assertIs(self.docker.profiles[sid]["_admin_session"], expected)
+        profile = (await (await self.client.get("/api/catalog", headers=admin)).json())["games"][0]
+        response = await self.client.put("/api/admin/games", headers=admin,
+            json={**profile, "env": {"GAMEDOCK_ADMIN_SESSION": "1"}})
+        self.assertEqual(response.status, 400)
+
     async def test_docker_resource_payload(self):
         docker = Docker()
 
@@ -651,6 +706,7 @@ class API(unittest.IsolatedAsyncioTestCase):
             )
         )
         self.assertEqual(streaming, {"quality": 80, "diagnostics_enabled": False})
+        self.assertIn("GAMEDOCK_ADMIN_SESSION=0", call.args[2]["Env"])
         self.assertEqual(host["PidsLimit"], 256)
         self.assertEqual(host["Memory"], 1536 * 1024**2)
         self.assertEqual(host["NanoCpus"], 750000000)
@@ -668,11 +724,25 @@ class API(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Mounts", guard["HostConfig"])
         await docker.start("quota", 2, {
             "id": "desktop", "image": "runtime:local", "command": ["xterm"],
-            "env": {}, "memory_mb": 1536, "cpus": .75, "pids_limit": 1024,
+            "env": {"GAMEDOCK_ADMIN_SESSION": "spoofed"}, "memory_mb": 1536,
+            "cpus": .75, "pids_limit": 1024, "_admin_session": True,
         }, "1280x720")
         configured = next(c.args[2]["HostConfig"] for c in docker.request.call_args_list
             if c.args[1] == "/containers/create?name=gamedock-quota")
         self.assertEqual(configured["PidsLimit"], 1024)
+        configured_env = next(c.args[2]["Env"] for c in docker.request.call_args_list
+            if c.args[1] == "/containers/create?name=gamedock-quota")
+        self.assertEqual([entry for entry in configured_env
+            if entry.startswith("GAMEDOCK_ADMIN_SESSION=")], ["GAMEDOCK_ADMIN_SESSION=1"])
+        await docker.start("untrusted", 2, {
+            "id": "desktop", "image": "runtime:local", "command": ["xterm"],
+            "env": {"GAMEDOCK_ADMIN_SESSION": "1"}, "memory_mb": 1536, "cpus": .75,
+        }, "1280x720")
+        untrusted_env = next(c.args[2]["Env"] for c in docker.request.call_args_list
+            if c.args[1] == "/containers/create?name=gamedock-untrusted")
+        self.assertEqual([entry for entry in untrusted_env
+            if entry.startswith("GAMEDOCK_ADMIN_SESSION=")], ["GAMEDOCK_ADMIN_SESSION=0"])
+
 
     async def test_brand_appearance_validation_and_public_pages(self):
         admin = await self.login("admin", "login")

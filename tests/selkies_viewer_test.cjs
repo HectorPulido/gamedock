@@ -6,7 +6,7 @@ const path = require('node:path');
 const sent = [], styles = new Map();
 let focused = 0, timer, dirty = 0;
 const canvas = {tabIndex: -1, focus() {focused++;}};
-const document = {hidden: false, querySelector() {return canvas;},
+const document = {hidden: false, querySelector(selector) {return selector === '.sidebar' ? null : canvas;},
   getElementById(id) {return styles.get(id);}, createElement() {return {};},
   head: {append(style) {styles.set(style.id, style);}}};
 const win = {postMessage(message, origin) {sent.push({message, origin});}, focus() {focused++;},
@@ -24,6 +24,12 @@ assert.ok(dirty > 0);
 assert.match(styles.get('gamedock-vendor-ui').textContent, /display:none!important/);
 assert.equal(sent.find(x => x.message.type === 'setScaleLocally').message.value, true);
 assert.equal(sent.find(x => x.message.type === 'statsOpen').message.open, false);
+viewer.showNativePanel(true);
+assert.match(styles.get('gamedock-vendor-ui').textContent, /display:none!important/, 'Regular user must stay hidden');
+viewer.allowNativePanel(true);viewer.showNativePanel(true);
+assert.equal(styles.get('gamedock-vendor-ui').textContent, '', 'Admin may reveal the native panel');
+viewer.allowNativePanel(false);
+assert.match(styles.get('gamedock-vendor-ui').textContent, /display:none!important/, 'Revoking admin must hide native UI');
 viewer.audio(.5, true);
 assert.equal(sent.at(-2).message.value, .5);
 assert.equal(sent.at(-1).message.value, true);

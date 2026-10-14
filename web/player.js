@@ -13,6 +13,7 @@ frame.addEventListener("fsr-status", (event) => {
 });
 let diagnosticTimer;
 let viewerSettings = {};
+let nativePanelInitialized = false;
 function preference(key) {
   try {
     return localStorage.getItem("gamedock-" + key);
@@ -196,6 +197,15 @@ async function refresh() {
   if (!catalog.user) {
     location.replace("/");
     return;
+  }
+  const allowNativePanel = catalog.user.admin === true || catalog.user.admin === 1;
+  document.querySelector('#native-panel-setting').hidden = !allowNativePanel;
+  if (!allowNativePanel) document.querySelector('#native-panel-toggle').checked = false;
+  viewer.allowNativePanel(allowNativePanel);
+  if (allowNativePanel && !nativePanelInitialized) {
+    nativePanelInitialized = true;
+    document.querySelector("#native-panel-toggle").checked = true;
+    viewer.showNativePanel(true);
   }
   settings = catalog.settings;
   GameDockTheme.apply(settings);
@@ -442,3 +452,11 @@ function applyAudio() {
 }
 audioVolume.addEventListener('input', applyAudio);
 audioMuted.addEventListener('change', applyAudio);
+
+// The authenticated server authorizes the administrator session independently;
+// this checkbox only controls visibility of its native technical dashboard.
+document.querySelector('#native-panel-toggle').addEventListener('change', event => {
+  viewer.showNativePanel(event.target.checked);
+  settingsDialog.close();
+  returnFocus();
+});

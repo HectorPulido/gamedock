@@ -8,7 +8,7 @@ COPY patch-selkies-sessions.py /opt/gamedock/patch-selkies-sessions.py
 RUN /lsiopy/bin/python /opt/gamedock/patch-selkies-sessions.py
 COPY patch-selkies-estimator.py /opt/gamedock/patch-selkies-estimator.py
 RUN /lsiopy/bin/python /opt/gamedock/patch-selkies-estimator.py
-COPY gamepad.py streaming.py gpu.py gamedock_metrics.py selkies_gateway.py /usr/local/bin/
+COPY gamepad.py streaming.py gpu.py gamedock_metrics.py selkies_gateway.py selkies_policy.py /usr/local/bin/
 COPY entrypoint.py /usr/local/bin/gamedock-runtime
 ENV HOME=/home/player DISPLAY=:0 XDG_RUNTIME_DIR=/tmp/gamedock-runtime PATH=/lsiopy/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin START_DOCKER=false
 USER 1000:1000

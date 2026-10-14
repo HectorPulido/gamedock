@@ -11,7 +11,8 @@ import sys
 import time
 
 from gpu import configured_gpu, prepare_command, configure_software, renderer_info
-from streaming import selkies_environment, validate_streaming
+from streaming import validate_streaming
+from selkies_policy import session_environment
 
 
 def resolution(value):
@@ -50,12 +51,18 @@ def main():
     runtime = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp/gamedock-runtime'))
     runtime.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings = validate_streaming(json.loads(os.environ.get('GAMEDOCK_STREAMING', '{}')), complete=True)
-    os.environ.update(selkies_environment(settings, size))
+    admin = os.environ.get("GAMEDOCK_ADMIN_SESSION") == "1"
+    if admin:
+        # Remove additional profile-level locks as well as the default policy.
+        for key, value in list(os.environ.items()):
+            if key.startswith("SELKIES_"):
+                os.environ[key] = value.replace("|locked", "")
+    os.environ.update(session_environment(settings, size, admin=admin))
     os.environ['PULSE_RUNTIME_PATH'] = str(runtime / 'pulse')
     (runtime / 'pulse').mkdir(mode=0o700, exist_ok=True)
     gpu = configured_gpu()
     configure_software(gpu)
-    os.environ['SELKIES_USE_CPU'] = ('true' if gpu['vendor'] == 'none' else 'false') + '|locked'
+    os.environ['SELKIES_USE_CPU'] = ('true' if gpu['vendor'] == 'none' else 'false') + ('' if admin else '|locked')
     children = []
 
     def start(args, **kwargs):

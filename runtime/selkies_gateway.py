@@ -112,7 +112,9 @@ async def static(request):
     if not path.is_relative_to(root) or not path.is_file():
         raise web.HTTPNotFound()
     if path.name == 'index.html':
-        body = path.read_bytes().replace(b'</head>', HIDE_DASHBOARD + b'</head>', 1)
+        body = path.read_bytes()
+        if not request.app['admin_session']:
+            body = body.replace(b'</head>', HIDE_DASHBOARD + b'</head>', 1)
         return web.Response(body=body, content_type='text/html',
                             headers={'Cache-Control': 'no-store'})
     return web.FileResponse(path)
@@ -136,6 +138,7 @@ async def metrics(request):
 def application(root='/usr/share/selkies/selkies-dashboard', runtime=None):
     runtime = runtime or os.environ.get('XDG_RUNTIME_DIR', '/tmp/gamedock-runtime')
     app = web.Application(client_max_size=64 * 1024)
+    app['admin_session'] = os.environ.get('GAMEDOCK_ADMIN_SESSION') == '1'
     app['root'] = Path(root).resolve()
     app['presence'] = Presence(Path(runtime) / 'viewers.json')
     app['metrics'] = CaptureMetrics(json.loads(os.environ.get('GAMEDOCK_STREAMING', '{}')))
