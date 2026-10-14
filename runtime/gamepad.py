@@ -58,8 +58,10 @@ class Output:
         self.mode = "keyboard"
         self.held = set()
         self.device = None
+        UInputError = OSError
         try:
             from evdev import UInput, AbsInfo, ecodes as e
+            from evdev.uinput import UInputError
 
             self.e = e
             self.keys = [
@@ -125,7 +127,7 @@ class Output:
                 raise OSError("Virtual input node not found")
             os.chown("/dev/input/event0", 1000, 1000)
             self.mode = "gamepad"
-        except (ImportError, OSError, PermissionError):
+        except (ImportError, OSError, PermissionError, UInputError):
             if self.device:
                 self.device.close()
                 self.device = None

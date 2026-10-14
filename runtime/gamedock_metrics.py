@@ -1,7 +1,6 @@
-"""Lightweight Xpra capture telemetry, attached to its existing info response."""
+"""Session process/cgroup telemetry, with optional transport capture counters."""
 
 from collections import deque
-import functools
 import json
 import os
 from pathlib import Path
@@ -99,7 +98,7 @@ class CaptureMetrics:
                 )
             except (OSError, ValueError, IndexError):
                 continue
-        xpra_pid, root = os.getpid(), os.getppid()
+        stream_pid, root = os.getpid(), os.getppid()
 
         def descendant(pid, ancestor):
             visited = set()
@@ -110,6 +109,12 @@ class CaptureMetrics:
                 pid = processes[pid][0]
             return False
 
+        # Selkies runs capture/audio/HTTP as sibling processes. The supervisor
+        # publishes their roots; keep Wine/game orphans accounted separately.
+        try:
+            stream_roots = json.loads((Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp/gamedock-runtime")) / "stream-processes.json").read_text())
+        except (OSError, ValueError):
+            stream_roots = [stream_pid]
         ticks_by_pid = {}
         memory = {"game": 0, "stream": 0}
         pss = {"game": 0, "stream": 0}
@@ -120,7 +125,7 @@ class CaptureMetrics:
                 continue
             kind = (
                 "stream"
-                if descendant(pid, xpra_pid) or name in ("Xvfb", "openbox")
+                if any(descendant(pid, p) for p in stream_roots) or name in ("Xvfb", "openbox")
                 else "game"
             )
             ticks_by_pid[(pid, started)] = (kind, ticks)
@@ -190,60 +195,3 @@ class CaptureMetrics:
         except (OSError, ValueError, KeyError):
             result["container_cpu_percent"] = None
         return result
-
-
-def instrument(server_class):
-    """Install once at Xpra server import; no extra process, port, or polling CLI."""
-    if getattr(server_class, "_gamedock_metrics_installed", False):
-        return
-    server_class._gamedock_metrics_installed = True
-    settings = json.loads(os.environ.get("GAMEDOCK_STREAMING", "{}"))
-    metrics = CaptureMetrics(settings)
-    if metrics.enabled:
-        from xpra.x11.shadow.ximage_capture import XImageCapture
-        from xpra.gtk.capture import GTKImageCapture
-
-        for cls in (XImageCapture, GTKImageCapture):
-            original = cls.get_image
-
-            def wrap(method):
-                @functools.wraps(method)
-                def measured(self, x, y, width, height):
-                    started = time.monotonic()
-                    result = method(self, x, y, width, height)
-                    if result is not None:
-                        metrics.read(time.monotonic() - started, width * height)
-                    return result
-
-                return measured
-
-            cls.get_image = wrap(original)
-        original_refresh = server_class.refresh_windows
-
-        def refresh(self):
-            metrics.cycle()
-            return original_refresh(self)
-
-        server_class.refresh_windows = refresh
-    original_info = server_class.get_threaded_info
-
-    def info(self, *args, **kwargs):
-        result = original_info(self, *args, **kwargs)
-
-        # HTML5 rencodeplus cannot decode float64 (typecode 44).
-        # Keep decimal precision as strings; omit unavailable initial CPU values.
-        def compatible(value):
-            if isinstance(value, dict):
-                return {
-                    key: compatible(item)
-                    for key, item in value.items()
-                    if item is not None
-                }
-            if isinstance(value, float):
-                return str(value)
-            return value
-
-        result["gamedock"] = compatible(metrics.snapshot())
-        return result
-
-    server_class.get_threaded_info = info

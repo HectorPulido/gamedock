@@ -180,6 +180,7 @@ def validate_profile(data):
             "XDG_RUNTIME_DIR",
             "GAMEDOCK_RESOLUTION",
             "GAMEDOCK_STREAMING",
+            "GAMEDOCK_ADMIN_SESSION",
             "GAMEDOCK_GPU",
             "GAMEDOCK_GPU_VENDOR",
             "NVIDIA_VISIBLE_DEVICES",
@@ -216,6 +217,8 @@ def validate_profile(data):
     network_policy = validate_policy(
         data.get("network_policy"), data.get("internet_access", False)
     )
+    if type(data.get("pids_limit", 256)) is not int or not 64 <= data.get("pids_limit", 256) <= 16384:
+        raise ValueError("Process/thread limit must be an integer between 64 and 16384")
     validate_resources(data, nullable=True)
     validate_streaming(data.get("streaming", {}))
     validate_gpu(data.get("gpu", {}))
@@ -234,6 +237,7 @@ def validate_profile(data):
             ("max_per_user", 1),
             ("enabled", True),
             ("internet_access", False),
+            ("pids_limit", 256),
             ("memory_mb", None),
             ("cpus", None),
             ("streaming", {}),
@@ -291,7 +295,9 @@ class Docker:
                     }
                 ),
             ]
-            + [k + "=" + v for k, v in profile["env"].items()],
+            + [k + "=" + v for k, v in profile["env"].items()
+               if k != "GAMEDOCK_ADMIN_SESSION"]
+            + ["GAMEDOCK_ADMIN_SESSION=" + ("1" if profile.get("_admin_session") is True else "0")],
             "Labels": {
                 "io.gamedock.managed": "true",
                 "io.gamedock.session": sid,
@@ -302,7 +308,7 @@ class Docker:
                 "NetworkMode": "container:" + gateway,
                 "Memory": profile["memory_mb"] * 1024**2,
                 "NanoCpus": round(profile["cpus"] * 1_000_000_000),
-                "PidsLimit": 256,
+                "PidsLimit": profile.get("pids_limit", 256),
                 "CapDrop": ["ALL"],
                 "SecurityOpt": ["no-new-privileges:true"],
                 "Mounts": [{"Type": "volume", "Source": volume, "Target": "/data"}],
@@ -494,7 +500,7 @@ async def security(request, handler):
                 await request.json(), dict
             ):
                 raise ValueError("A JSON object is required")
-        token = request.cookies.get("gamedock", "")
+        token = request.cookies.get(request.app["cookie_name"], "")
         if request.headers.get("Authorization", "").startswith("Bearer "):
             token = request.headers["Authorization"][7:]
         request["user"] = None
@@ -685,7 +691,7 @@ async def auth(request):
     )
     response = web.json_response({"user": public_user(row), "token": token})
     response.set_cookie(
-        "gamedock",
+        request.app["cookie_name"],
         token,
         httponly=True,
         samesite="Strict",
@@ -700,7 +706,7 @@ async def logout(request):
     user(request)
     request.app["db"].execute("DELETE FROM tokens WHERE digest=?", (request["digest"],))
     response = web.json_response({"ok": True})
-    response.del_cookie("gamedock", path="/")
+    response.del_cookie(request.app["cookie_name"], path="/")
     return response
 
 
@@ -837,6 +843,9 @@ async def instances(request):
         profile["streaming"] = validate_streaming(
             {**cfg["streaming"], **profile.get("streaming", {})}, complete=True
         )
+        # Launch authority comes only from the authenticated account, never
+        # request JSON or a stored game profile. This metadata is not persisted.
+        profile["_admin_session"] = bool(u["admin"])
         sid = secrets.token_hex(16)
         app["db"].execute(
             "INSERT INTO instances(id,uid,game,resolution,status,created,last_activity) VALUES (?,?,?,?,?,?,?)",
@@ -1056,7 +1065,11 @@ async def proxy(request):
     origin = request.headers.get("Origin")
     if origin and origin != request.app["origin"]:
         raise web.HTTPForbidden(text="Invalid origin")
-    if request.headers.get("Upgrade", "").lower() != "websocket":
+    # Selkies multiplexes video, audio and control on one streaming socket.
+    # File-manager/auxiliary sockets are not viewers. Keep the root path for
+    # existing runtimes during a rolling image migration.
+    streaming = request.match_info.get("tail", "") in ("", "api/websockets")
+    if request.headers.get("Upgrade", "").lower() != "websocket" or not streaming:
         return await desktop_proxy(request)
     app, sid, token = request.app, instance["id"], object()
     # Reserve before any network await. Cleanup and incoming handshakes share a lock.
@@ -1080,25 +1093,6 @@ async def desktop_proxy(request):
         raise web.HTTPForbidden(text="Invalid origin")
     if instance["status"] != "running":
         raise web.HTTPConflict(text="Instance stopped")
-    if (
-        request.method == "GET"
-        and request.match_info.get("tail", "") in ("", "index.html")
-        and request.query.get("floating_menu")
-        != ("true" if config(request.app)["desktop_toolbar"] else "false")
-        and request.headers.get("Upgrade", "").lower() != "websocket"
-    ):
-        return web.Response(
-            status=302,
-            headers={
-                "Location": str(
-                    request.rel_url.update_query(
-                        floating_menu="true"
-                        if config(request.app)["desktop_toolbar"]
-                        else "false"
-                    )
-                )
-            },
-        )
     info = await request.app["docker"].inspect(instance["id"])
     if not info or not info["State"]["Running"]:
         raise web.HTTPGone(text="The desktop has stopped")
@@ -1122,9 +1116,11 @@ async def desktop_proxy(request):
         query_string=request.query_string,
     )
     http = request.app["http"]
-    if request.method == "POST":
-        if tail != "gamedock-controller":
-            raise web.HTTPNotFound()
+    native_api = (tail.startswith("api/") and bool(request["user"]["admin"])
+                  and instance["uid"] == request["user"]["id"])
+    if request.method not in ("GET", "HEAD") and tail != "gamedock-controller" and not native_api:
+        raise web.HTTPForbidden(text="Native desktop settings require administrator access")
+    if request.method == "POST" and tail == "gamedock-controller":
         if request.content_type != "application/json":
             raise web.HTTPUnsupportedMediaType(text="JSON is required")
         body = await request.json()
@@ -1158,14 +1154,18 @@ async def desktop_proxy(request):
             for p in request.headers.get("Sec-WebSocket-Protocol", "").split(",")
             if p.strip()
         ]
+        # The streaming backend owns heartbeat and RTT measurement. Acknowledging
+        # control frames here would measure only the backend-to-portal hop.
         async with http.ws_connect(
-            target, protocols=protocols, max_msg_size=16 * 1024**2
+            target, protocols=protocols, max_msg_size=16 * 1024**2, autoping=False
         ) as upstream:
             downstream = web.WebSocketResponse(
-                protocols=protocols, max_msg_size=16 * 1024**2, heartbeat=10
+                protocols=protocols, max_msg_size=16 * 1024**2, autoping=False
             )
             await downstream.prepare(request)
-            request.app["viewers"][instance["id"]].ever_seen = True
+            presence = request.app["viewers"].get(instance["id"])
+            if presence and request.match_info.get("tail", "") in ("", "api/websockets"):
+                presence.ever_seen = True
 
             async def pump(source, dest):
                 async for message in source:
@@ -1183,6 +1183,10 @@ async def desktop_proxy(request):
                         await dest.send_bytes(message.data)
                     elif message.type == aiohttp.WSMsgType.TEXT:
                         await dest.send_str(message.data)
+                    elif message.type == aiohttp.WSMsgType.PING:
+                        await dest.ping(message.data)
+                    elif message.type == aiohttp.WSMsgType.PONG:
+                        await dest.pong(message.data)
                 await dest.close()
 
             async def revocation():
@@ -1223,7 +1227,11 @@ async def desktop_proxy(request):
                 await downstream.close()
             return downstream
     try:
-        async with http.get(target, allow_redirects=False) as upstream:
+        async with http.request(
+            request.method, target, allow_redirects=False,
+            data=await request.read() if native_api and request.method not in ("GET", "HEAD") else None,
+            headers={"Content-Type": request.headers["Content-Type"]} if "Content-Type" in request.headers else {},
+        ) as upstream:
             body = await upstream.read()
             headers = {
                 k: v
@@ -1286,7 +1294,7 @@ async def expire_idle(app, now=None):
 
 
 async def query_viewers(app, sid):
-    """Internal-only, bounded, cheap snapshot. Never query full Xpra metrics."""
+    """Internal-only, bounded, cheap snapshot. Never query full streaming diagnostics."""
     info = await app["docker"].inspect(sid)
     if not info or not info["State"]["Running"]:
         raise DesktopStopped()
@@ -1534,6 +1542,10 @@ def create_app(db_path=None, docker=None):
         b"".join(name.encode() + b"\0" + data for name, data in files.items())
     ).hexdigest()
     app["origin"] = os.getenv("PUBLIC_URL", "http://localhost:8080").rstrip("/")
+    cookie_name = os.getenv("GAMEDOCK_SESSION_COOKIE", "gamedock")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", cookie_name):
+        raise ValueError("Invalid session cookie name")
+    app["cookie_name"] = cookie_name
     path = db_path or os.getenv("DATABASE", "/data/gamedock.sqlite")
     if path != ":memory:":
         Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -1624,7 +1636,7 @@ def create_app(db_path=None, docker=None):
     app.router.add_get("/api/admin/users", admin_users)
     app.router.add_patch("/api/admin/users/{uid}", admin_users)
     app.router.add_post("/desktop/{sid}/gamedock-controller", proxy)
-    app.router.add_get("/desktop/{sid}/{tail:.*}", proxy)
+    app.router.add_route("*", "/desktop/{sid}/{tail:.*}", proxy)
     app.router.add_get("/", platform_page)
     app.router.add_get("/admin", admin_page)
     app.router.add_get("/admin/", admin_page)

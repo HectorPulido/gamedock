@@ -1,3 +1,25 @@
+# Selkies migration validation (2026-10-13)
+
+The entries below the historical section describe the previous Xpra implementation
+and are retained as historical evidence only. They do not establish Selkies
+compatibility, current browser FPS or ten-player capacity. Current checks target
+Selkies gateway restrictions, fixed operator settings, session lifecycle, metrics
+and the generic GameDock viewer adapter. Real browser, native GPU, audio/controller
+hardware and simultaneous ten-player acceptance must be recorded separately.
+
+Example images now use Debian apt and numeric UID/GID 1000:1000. OpenTTD can be
+built against an isolated Selkies runtime tag without any commercial game files.
+Wine and Minecraft recipes require user-supplied clients; a Dockerfile update is
+not proof those games launch or their authentication/audio work.
+
+Observed generic OpenTTD smoke test: Debian image built successfully against
+`gamedock-runtime:selkies-test`; an isolated UID1000 container with all capabilities
+dropped and no-new-privileges served Selkies HTTP200 and ran OpenTTD14.1 at
+960×540. Logs showed Selkies2.0 with H.264 target30FPS. This proves startup, not
+actual browser decoder/FPS/audio quality. The disposable container was removed.
+
+## Historical Xpra validation
+
 # GameDock validation
 
 The complete suite ran on October 9, 2026, on `hector-server`, Linux x86_64,
@@ -349,3 +371,18 @@ retaining the game volume to verify persistence.
   Explicit WebGL context loss triggers the tested Smooth fallback.
 - Comparison artifacts: `/tmp/gamedock-streaming-artifacts/xpra-540-smooth.png`,
   `xpra-540-crisp.png`, `xpra-540-fsr.png` and `fsr-colors.png`.
+
+
+## Selkies backpressure FPS recovery
+
+- The pinned Selkies 2.0.0 estimator previously sampled ACK progress over an
+  interval that could include server-imposed throttling. Reopening the stream
+  could lower estimated client FPS and progressively tighten its own queue limit.
+- The runtime adapter excludes gated intervals and the first recovery boundary
+  from the estimate. Healthy slower clients still scale the bounded queue.
+- `python3 -m unittest tests.test_selkies_estimator` uses the native method AST
+  fixture: recovery stays at 30 FPS instead of decaying to 21.2; a healthy 12 FPS
+  client still converges to 12. It also checks uint16 wrap, idle samples, stale
+  live-upgrade state, and rejection of unknown/already-patched source contracts.
+- This fixes estimator feedback; it does not establish a WAN throughput guarantee
+  or eliminate real network congestion and slow browser decoding.

@@ -33,7 +33,7 @@ Linux uinput creates a kernel input device. On a dedicated Linux gaming server:
 Sessions get `/dev/uinput`, a private tmpfs `/dev/input`, input-event read access
 and MKNOD/SETUID/SETGID/CHOWN capabilities for startup. The input helper creates
 only its own event node in that private directory and drops to UID 1000 before
-accepting input; the runtime drops to UID 1000 before launching Xpra or the game.
+accepting input; the runtime drops to UID 1000 before launching Selkies or the game.
 The host input directory is never mounted. If setup fails, keyboard mode is used.
 Kernel devices are host-global: this option belongs on a trusted dedicated host,
 not an isolation boundary against hostile game code. Docker Desktop/OrbStack

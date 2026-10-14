@@ -2,5 +2,5 @@
 ARG BASE_IMAGE=gamedock-runtime:local
 FROM ${BASE_IMAGE}
 USER root
-RUN dnf install -y --setopt=install_weak_deps=False python3-evdev && dnf clean all
-USER player
+RUN apt-get update && apt-get install -y --no-install-recommends python3-evdev && rm -rf /var/lib/apt/lists/*
+USER 1000:1000

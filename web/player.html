@@ -115,6 +115,9 @@
             <option value="crisp">Crisp</option>
           </select></label
         >
+        <label class="viewer-scale">Volume<input id="audio-volume" type="range" min="0" max="1" step="0.05" aria-label="Browser audio volume" /></label>
+        <label class="viewer-scale">Mute<input id="audio-muted" type="checkbox" aria-label="Mute browser audio" /></label>
+        <label id="native-panel-setting" class="viewer-scale" hidden>Selkies panel · administrator<input id="native-panel-toggle" type="checkbox" aria-label="Native Selkies panel" /></label>
         <button id="viewer-defaults" class="secondary">Server defaults</button>
         <button
           id="diagnostics-toggle"
@@ -195,24 +198,16 @@
       <p id="diagnostics-status">Waiting for a sample…</p>
       <dl id="diagnostics-values"></dl>
       <p class="diagnostics-help">
-        Capture measures image reads. Delivered and decoded FPS use Xpra frame
-        boundaries; partial updates are counted separately. These are not the
-        game's FPS. A static screen can produce few updates.
-      </p>
-      <p class="diagnostics-help">
-        CPU: 100% = one core. Data/hour projects the current image payload rate
-        and excludes audio, protocol and TLS overhead. Bandwidth is an adaptive
-        encoding budget, not a strict network traffic shaper. RSS sums can count
-        shared pages repeatedly; PSS apportions them. Container memory also
-        includes page cache and kernel usage. Game metrics include Wine
-        processes adopted by the container init.
+        Encoded and displayed FPS measure the video stream, not the game's FPS.
+        Missing metrics are shown as unavailable. Data/hour projects the current
+        video payload and excludes audio, protocol and TLS overhead.
       </p>
     </aside>
     <main id="desktop-stage">
       <iframe
         id="desktop-frame"
         title="Game desktop"
-        allow="fullscreen; clipboard-read; clipboard-write"
+        allow="autoplay; fullscreen; clipboard-read; clipboard-write"
         allowfullscreen
       ></iframe>
       <div id="touch-controller" aria-label="Touch controller" hidden>

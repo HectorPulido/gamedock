@@ -181,27 +181,38 @@ STREAMING_FIELDS = {
         "Combine TCP packets before sending", False, "Capture and latency"
     ),
 }
+# Saved Xpra profiles remain readable; these fields have no Selkies effect.
+LEGACY_FIELDS = {
+    'remote_pointer_marker', 'quality', 'min_quality', 'speed', 'min_speed',
+    'auto_refresh_delay', 'bandwidth_detection', 'compression_level',
+    'encoding', 'encodings', 'video_encoders', 'csc_modules', 'video_scaling',
+    'xshm', 'idle_fix', 'batch_match_refresh', 'batch_min_delay',
+    'batch_start_delay', 'batch_max_delay', 'batch_expire_delay',
+    'socket_nodelay', 'socket_cork',
+}
+for key in LEGACY_FIELDS:
+    STREAMING_FIELDS[key]['deprecated'] = True
+STREAMING_FIELDS['bandwidth_mbps'].update(default=8, label='Video bitrate (Mbps)',
+    help='Video encoding target, not a strict traffic shaper. Legacy 0 uses 8 Mbps.')
+STREAMING_FIELDS.update({
+    'video_codec': choice('Video codec', 'h264enc', ['h264enc', 'jpeg'], 'Video',
+        'H.264 uses hardware when supported and falls back to software.'),
+    'rate_control': choice('Video rate control', 'cbr', ['cbr', 'crf'], 'Video'),
+    'video_crf': number('Video CRF', 25, 5, 50, 'Video',
+        help='Lower values improve quality at greater bandwidth. Used in CRF mode.'),
+    'jpeg_quality': number('JPEG quality', 80, 1, 100, 'Video'),
+    'audio_enabled': toggle('Enable game audio', True, 'Audio'),
+    'audio_bitrate': choice('Audio bitrate (kbps)', 128,
+        [32, 48, 64, 96, 128, 192, 256, 320], 'Audio'),
+})
+# Select fields use string values, including Opus bitrate presets.
+STREAMING_FIELDS['audio_bitrate']['default'] = '128'
+STREAMING_FIELDS['audio_bitrate']['options'] = [str(x) for x in STREAMING_FIELDS['audio_bitrate']['options']]
 STREAMING_DEFAULTS = {key: field["default"] for key, field in STREAMING_FIELDS.items()}
 STREAMING_PRESETS = {
-    "balanced": {**STREAMING_DEFAULTS},
-    "sharp": {**STREAMING_DEFAULTS, "quality": 95, "min_quality": 85, "min_speed": 60},
-    "low_latency": {
-        **STREAMING_DEFAULTS,
-        "min_quality": 30,
-        "min_speed": 90,
-        "refresh_rate": 20,
-        "bandwidth_mbps": 6,
-        "encodings": "h264,webp,jpeg",
-        "video_encoders": "openh264",
-        "csc_modules": "libyuv",
-    },
-    "lossless": {
-        **STREAMING_DEFAULTS,
-        "encoding": "png",
-        "encodings": "png,rgb",
-        "quality": 100,
-        "min_quality": 100,
-    },
+    'balanced': {**STREAMING_DEFAULTS},
+    'sharp': {**STREAMING_DEFAULTS, 'bandwidth_mbps': 12, 'video_crf': 18, 'jpeg_quality': 95},
+    'low_latency': {**STREAMING_DEFAULTS, 'refresh_rate': 24, 'bandwidth_mbps': 4},
 }
 
 
@@ -245,47 +256,42 @@ def validate_streaming(value, complete=False):
     return result
 
 
-def runtime_options(settings):
-    """Return argument arrays and environment; no shell interpolation."""
+def selkies_environment(settings, size):
+    """Translate validated admin settings into fixed Selkies backend limits."""
+    import re
+    if not isinstance(size, str) or not re.fullmatch(r"[0-9]{3,4}x[0-9]{3,4}", size):
+        raise ValueError('Resolution must be WIDTHxHEIGHT')
+    width, height = map(int, size.split('x'))
+    if not (640 <= width <= 3840 and 480 <= height <= 2160):
+        raise ValueError('Resolution out of bounds')
     cfg = validate_streaming(settings, complete=True)
-    args = ["--resize-display=no"]
-    for key in (
-        "encoding",
-        "encodings",
-        "video_encoders",
-        "csc_modules",
-        "quality",
-        "min_quality",
-        "speed",
-        "min_speed",
-        "refresh_rate",
-        "auto_refresh_delay",
-        "compression_level",
-    ):
-        args.append("--" + key.replace("_", "-") + "=" + str(cfg[key]))
-    args += [
-        "--bandwidth-limit=" + str(round(cfg["bandwidth_mbps"] * 1_000_000)),
-        "--bandwidth-detection=" + ("yes" if cfg["bandwidth_detection"] else "no"),
-        "--video-scaling=" + ("auto" if cfg["video_scaling"] else "off"),
-    ]
-    env = {
-        "XPRA_" + key.upper(): str(cfg[key])
-        for key in (
-            "batch_min_delay",
-            "batch_start_delay",
-            "batch_max_delay",
-            "batch_expire_delay",
-        )
+    fps = cfg['refresh_rate']
+    bitrate = round((cfg['bandwidth_mbps'] or 8) * 1000)
+    return {
+        'SELKIES_FRAMERATE': f'{fps}-{fps}',
+        'SELKIES_VIDEO_BITRATE': f'{bitrate}-{bitrate}',
+        'SELKIES_MANUAL_WIDTH': str(width),
+        'SELKIES_MANUAL_HEIGHT': str(height),
+        'SELKIES_ENABLE_RESIZE': 'false|locked',
+        'SELKIES_UI_SHOW_SIDEBAR': 'false',
+        'SELKIES_ENCODER': cfg['video_codec'],
+        'SELKIES_RATE_CONTROL_MODE': cfg['rate_control'],
+        'SELKIES_VIDEO_CRF': f"{cfg['video_crf']}-{cfg['video_crf']}",
+        'SELKIES_JPEG_QUALITY': f"{cfg['jpeg_quality']}-{cfg['jpeg_quality']}",
+        'SELKIES_VIDEO_STREAMING_MODE': 'true|locked',
+        'SELKIES_AUDIO_ENABLED': ('true' if cfg['audio_enabled'] else 'false') + '|locked',
+        'SELKIES_AUDIO_BITRATE': str(int(cfg['audio_bitrate']) * 1000),
+        'SELKIES_MICROPHONE_ENABLED': 'false|locked',
+        'SELKIES_WEBCAM_ENABLED': 'false|locked',
+        'SELKIES_COMMAND_ENABLED': 'false|locked',
+        'SELKIES_PRINTING_ENABLED': 'false|locked',
+        'SELKIES_FILE_TRANSFERS': 'none',
+        'SELKIES_ENABLE_BASIC_AUTH': 'false',
+        'SELKIES_ALLOWED_ORIGINS': '*',
+        'START_DOCKER': 'false',
     }
-    env.update(
-        {
-            "XPRA_SHADOW_XSHM": str(int(cfg["xshm"])),
-            "XPRA_XSHM": str(int(cfg["xshm"])),
-            "GAMEDOCK_IDLE_FIX": str(int(cfg["idle_fix"])),
-            "GAMEDOCK_BATCH_MATCH_REFRESH": str(int(cfg["batch_match_refresh"])),
-            "GAMEDOCK_CAPTURE_HZ": str(cfg["refresh_rate"]),
-            "XPRA_SOCKET_NODELAY": str(int(cfg["socket_nodelay"])),
-            "XPRA_SOCKET_CORK": str(int(cfg["socket_cork"])),
-        }
-    )
-    return args, env
+
+
+def runtime_options(settings):
+    """Compatibility helper for callers; Xpra arguments are no longer emitted."""
+    return [], selkies_environment(settings, '1280x720')
