@@ -156,3 +156,19 @@ class DockerGPU(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(
                 "Devices" in payload["HostConfig"], vendor in ("amd", "intel")
             )
+
+
+class StandaloneGPUProbe(unittest.TestCase):
+    def test_amd_and_intel_use_native_dri_without_virtualgl(self):
+        from runtime import gpu as module
+        from unittest.mock import MagicMock
+        for vendor, renderer in (("amd", "AMD Radeon Graphics"), ("intel", "Intel Iris Graphics")):
+            profile = validate_gpu({"vendor": vendor, "device": "/dev/dri/renderD129"})
+            display = MagicMock()
+            probe = SimpleNamespace(returncode=0, stderr="", stdout="OpenGL vendor string: " + vendor + "\nOpenGL renderer string: " + renderer + "\nOpenGL version string: 4.6\n")
+            with patch.object(module, "configured_gpu", return_value=profile), patch.object(module, "configure_software"), patch.object(module.subprocess, "Popen", return_value=display) as spawn, patch.object(module.subprocess, "run", return_value=probe) as run, patch.object(module, "prepare_command") as vgl:
+                self.assertEqual(module.main(), 0)
+                self.assertEqual(spawn.call_args.args[0][-3:], ["-glamor", "-dri", "/dev/dri/renderD129"])
+                self.assertEqual(run.call_args.args[0], ["glxinfo", "-B"])
+                vgl.assert_not_called()
+                display.terminate.assert_called_once()

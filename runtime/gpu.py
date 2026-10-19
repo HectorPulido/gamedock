@@ -225,12 +225,17 @@ def prepare_command(command, gpu=None):
 
 
 def main():
-    """Standalone check starts an isolated display; runtime uses prepare_command."""
+    """Check the same native DRI3 display used by AMD/Intel sessions."""
     import time
 
     os.environ["DISPLAY"] = ":99"
+    gpu = configured_gpu()
+    configure_software(gpu)
+    display_args = ["Xvfb", ":99", "-screen", "0", "640x480x24", "-nolisten", "tcp"]
+    if gpu["vendor"] in ("amd", "intel"):
+        display_args += ["-glamor", "-dri", gpu["device"]]
     display = subprocess.Popen(
-        ["Xvfb", ":99", "-screen", "0", "640x480x24", "-nolisten", "tcp"],
+        display_args,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -248,7 +253,14 @@ def main():
             time.sleep(0.1)
         else:
             raise RuntimeError("GPU test display timed out")
-        _, info = prepare_command(["true"])
+        if gpu["vendor"] in ("amd", "intel"):
+            probe = subprocess.run(["glxinfo", "-B"], capture_output=True, text=True, timeout=30)
+            if probe.returncode:
+                raise RuntimeError("GPU OpenGL check failed: " + (probe.stderr or probe.stdout)[-2000:])
+            info = renderer_info(probe.stdout, gpu["vendor"])
+            info.update(device=gpu["device"], mode="dri3")
+        else:
+            _, info = prepare_command(["true"], gpu)
         print(json.dumps(info))
         return 0
     except (ValueError, RuntimeError, subprocess.TimeoutExpired) as error:

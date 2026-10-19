@@ -1,4 +1,4 @@
-/* Client-only AMD FSR1: upstream EASU then RCAS, after Xpra decodes.
+/* Client-only AMD FSR1: upstream EASU then RCAS, after the stream decodes.
  * The overlay never receives input; the original iframe maps all coordinates.
  */
 window.GameDockFSR = (() => {
@@ -151,17 +151,19 @@ void main(){uvec4 con;FsrRcasCon(con,sharpness);vec3 rgb;FsrRcasF(rgb.r,rgb.g,rg
       if (!active || failed) return;
       try {
         const doc = frame.contentDocument;
-        source = [...(doc?.querySelectorAll("canvas:not(.fsr-overlay)") || [])]
+        source = [...(doc?.querySelectorAll("canvas:not(.fsr-overlay),video") || [])]
           .filter(
-            (c) => c.width && c.height && c.getBoundingClientRect().width > 0,
+            (c) => (c.videoWidth || c.width) && (c.videoHeight || c.height) && c.getBoundingClientRect().width > 0,
           )
-          .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+          .sort((a, b) => (b.videoWidth || b.width) * (b.videoHeight || b.height) - (a.videoWidth || a.width) * (a.videoHeight || a.height))[0];
         if (!source || doc.hidden || document.hidden) {
           canvas.hidden = true;
           dirty = true;
           raf = requestAnimationFrame(render);
           return;
         }
+        const sourceWidth = source.videoWidth || source.width;
+        const sourceHeight = source.videoHeight || source.height;
         const r = source.getBoundingClientRect(),
           fr = frame.getBoundingClientRect();
         const sx = fr.width / frame.offsetWidth,
@@ -169,7 +171,7 @@ void main(){uvec4 con;FsrRcasCon(con,sharpness);vec3 rgb;FsrRcasF(rgb.r,rgb.g,rg
         const w = Math.round(r.width * sx * devicePixelRatio),
           h = Math.round(r.height * sy * devicePixelRatio);
         // Keep the existing renderer for native-size/downscaled content.
-        if (w <= source.width && h <= source.height) {
+        if (w <= sourceWidth && h <= sourceHeight) {
           canvas.hidden = true;
           dirty = true;
           stats.mode = "smooth (no enlargement)";
@@ -201,7 +203,7 @@ void main(){uvec4 con;FsrRcasCon(con,sharpness);vec3 rgb;FsrRcasF(rgb.r,rgb.g,rg
           start();
           if (failed) return;
           const max = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-          if (w > max || h > max || source.width > max || source.height > max)
+          if (w > max || h > max || sourceWidth > max || sourceHeight > max)
             throw Error("Canvas exceeds GPU texture limit");
           if (canvas.parentElement !== source.parentElement)
             source.parentElement.append(canvas);
@@ -252,8 +254,8 @@ void main(){uvec4 con;FsrRcasCon(con,sharpness);vec3 rgb;FsrRcasF(rgb.r,rgb.g,rg
           gl.uniform1i(gl.getUniformLocation(programs[0], "image"), 0);
           gl.uniform2f(
             gl.getUniformLocation(programs[0], "inputSize"),
-            source.width,
-            source.height,
+            sourceWidth,
+            sourceHeight,
           );
           gl.uniform2f(gl.getUniformLocation(programs[0], "outputSize"), w, h);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -268,7 +270,7 @@ void main(){uvec4 con;FsrRcasCon(con,sharpness);vec3 rgb;FsrRcasF(rgb.r,rgb.g,rg
           stats.mode = "fsr";
           stats.frames++;
           stats.submit_ms = performance.now() - began;
-          stats.source = source.width + "×" + source.height;
+          stats.source = sourceWidth + "×" + sourceHeight;
           stats.output = w + "×" + h;
           dirty = false;
         }

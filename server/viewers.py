@@ -24,7 +24,7 @@ class Presence:
         self.generation += 1
         self.leases.add(token)
         # Old proxy sockets cannot survive a portal restart. Once a new proxy
-        # connects, its leases replace the bootstrap observation from Xpra.
+        # connects, its leases replace the bootstrap observation from the runtime.
         self.observed = 0
         self.known = True
         self.since = None

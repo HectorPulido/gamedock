@@ -802,6 +802,7 @@ function fillStreaming(values) {
   if (!fields.children.length) {
     const groups = new Map();
     for (const [key, spec] of Object.entries(state.streaming_schema)) {
+      if (spec.deprecated) continue;
       if (!groups.has(spec.group)) {
         const group = node("fieldset");
         group.className = "streaming-group";
@@ -844,6 +845,7 @@ function fillStreaming(values) {
     }
   }
   for (const [key, spec] of Object.entries(state.streaming_schema)) {
+      if (spec.deprecated) continue;
     const input = $("#streaming-settings").elements[key];
     if (spec.type === "boolean") input.checked = values[key] ?? spec.default;
     else input.value = values[key] ?? spec.default;
@@ -862,6 +864,7 @@ $("#streaming-settings").onsubmit = (event) => {
   action(async () => {
     const streaming = {};
     for (const [key, spec] of Object.entries(state.streaming_schema)) {
+      if (spec.deprecated) continue;
       const input = event.target.elements[key];
       streaming[key] =
         spec.type === "boolean"

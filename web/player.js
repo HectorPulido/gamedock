@@ -13,6 +13,7 @@ frame.addEventListener("fsr-status", (event) => {
 });
 let diagnosticTimer;
 let viewerSettings = {};
+let nativePanelInitialized = false;
 function preference(key) {
   try {
     return localStorage.getItem("gamedock-" + key);
@@ -156,22 +157,14 @@ frame.addEventListener("load", () => {
   viewer.dispose();
   viewer.filter(filterControl.value);
   viewer.remotePointer(viewerSettings.remote_pointer_marker === true);
+  viewer.audio(audioVolume.value, audioMuted.checked);
+  viewer.diagnostics(!diagnostics.hidden);
   try {
     const doc = frame.contentDocument;
-    // Xpra's own fullscreen resizes its viewport/canvas while the X display
-    // stays fixed. Route its toolbar and global shortcut through the outer
-    // player so the browser continues mapping input in source coordinates.
-    frame.contentWindow.toggle_fullscreen = toggleFullscreen;
-    doc.addEventListener(
-      "click",
-      (event) => {
-        if (!event.target.closest?.("#fullscreen_button")) return;
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        toggleFullscreen();
-      },
-      true,
-    );
+    // Reapply local gain after a trusted gesture unlocks the audio context.
+    doc.addEventListener("pointerdown", () => {
+      setTimeout(() => viewer.audio(audioVolume.value, audioMuted.checked), 100);
+    }, {once: true, passive: true});
     for (const type of [
       "pointerdown",
       "pointermove",
@@ -204,6 +197,15 @@ async function refresh() {
   if (!catalog.user) {
     location.replace("/");
     return;
+  }
+  const allowNativePanel = catalog.user.admin === true || catalog.user.admin === 1;
+  document.querySelector('#native-panel-setting').hidden = !allowNativePanel;
+  if (!allowNativePanel) document.querySelector('#native-panel-toggle').checked = false;
+  viewer.allowNativePanel(allowNativePanel);
+  if (allowNativePanel && !nativePanelInitialized) {
+    nativePanelInitialized = true;
+    document.querySelector("#native-panel-toggle").checked = true;
+    viewer.showNativePanel(true);
   }
   settings = catalog.settings;
   GameDockTheme.apply(settings);
@@ -249,7 +251,7 @@ async function refresh() {
     key,
     JSON.stringify([sid, ...recent.filter((id) => id !== sid)].slice(0, 100)),
   );
-  const src = "/desktop/" + sid + "/?floating_menu=" + settings.desktop_toolbar;
+  const src = "/desktop/" + sid + "/";
   if (frame.getAttribute("src") !== src) frame.src = src;
   document.title =
     (catalog.games.find((g) => g.id === current.game)?.name || current.game) +
@@ -311,34 +313,29 @@ document.querySelector("#viewer-defaults").onclick = () => {
   returnFocus();
 };
 const metrics = [
-  ["capture_fps", "Capture FPS", "fps"],
-  ["capture_cycles_fps", "Capture loop", "Hz"],
-  ["delivered_fps", "Delivered FPS", "fps"],
-  ["decoded_fps", "Decoded FPS", "fps"],
-  ["delivered_updates", "Delivered updates", "/s"],
-  ["decoded_updates", "Decoded updates", "/s"],
-  ["capture_ms", "Capture time", "ms"],
-  ["decode_ms", "Client decode / paint time", "ms"],
-  ["roundtrip_ms", "Client latency", "ms"],
-  ["image_mbps", "Image payload", "Mbps"],
-  ["hourly_gb", "Estimated image data", "GB/hour"],
+  ["delivered_fps", "Encoded FPS", "fps"],
+  ["decoded_fps", "Displayed FPS", "fps"],
+  ["encode_ms", "Encoding time", "ms"],
+  ["pipeline_ms", "Capture / encode pipeline", "ms"],
+  ["present_ms", "Receive → display time", "ms"],
+  ["roundtrip_ms", "Connection round trip", "ms"],
+  ["image_mbps", "Video payload", "Mbps"],
+  ["hourly_gb", "Estimated video data", "GB/hour"],
+  ["frames_not_shown", "Decoded frames not shown", ""],
   ["game_cpu_percent", "Game CPU", "%"],
-  ["stream_cpu_percent", "Xpra / display CPU", "%"],
-  ["game_rss_mb", "Game RSS (sum)", "MiB"],
-  ["game_pss_mb", "Game PSS (shared pages apportioned)", "MiB"],
-  ["game_processes", "Game processes", ""],
-  ["container_memory_mb", "Container memory (cgroup)", "MiB"],
-  ["container_cpu_percent", "Container CPU (cgroup)", "%"],
-  ["stream_rss_mb", "Streaming process memory", "MiB"],
-  ["codecs", "Observed codecs", ""],
-  ["client_codecs", "Browser codecs", ""],
-  ["h264_status", "H.264 negotiation", ""],
-  ["bandwidth_budget_mbps", "Effective client bandwidth budget", "Mbps"],
-  ["bandwidth_window_mbps", "Window bandwidth budget", "Mbps"],
-  ["gpu_vendor", "Graphics profile", ""],
-  ["gpu_renderer", "OpenGL renderer", ""],
-  ["software_threads", "CPU render workers (configured)", ""],
-  ["decode_errors", "Decode errors", ""],
+  ["stream_cpu_percent", "Streaming / display CPU", "%"],
+  ["game_rss_mb", "Game RSS", "MiB"],
+  ["game_pss_mb", "Game PSS", "MiB"],
+  ["stream_pss_mb", "Streaming / display PSS", "MiB"],
+  ["container_memory_mb", "Container memory", "MiB"],
+  ["container_cpu_percent", "Container CPU", "%"],
+  ["gpu_renderer", "Game OpenGL renderer", ""],
+  ["codecs", "Codec", ""],
+  ["encoder", "Server encoder", ""],
+  ["hardware_encoder", "Hardware encoder", ""],
+  ["zero_copy", "Zero-copy capture", ""],
+  ["decoder", "Browser decoder", ""],
+  ["decoder_evidence", "Decoder evidence", ""],
   ["geometry", "Source → displayed", ""],
   ["canvas", "Canvas backing size", ""],
   ["scaler_mode", "Browser scaler", ""],
@@ -375,29 +372,15 @@ function sampleDiagnostics() {
     const canvas = frame.contentDocument.querySelector("canvas");
     sample.canvas = canvas ? canvas.width + "×" + canvas.height : "—";
   } catch {}
-  const fresh =
-    sample.server_age != null &&
-    sample.server_age < (viewerSettings.metrics_interval || 2) * 3;
+  const fresh = sample.server_age != null && sample.server_age < 5;
   const status = document.querySelector("#diagnostics-status");
   status.textContent = !sample.connected
-    ? "Connecting to Xpra…"
-    : sample.server_age == null
-      ? "Waiting for server capture metrics…"
-      : !fresh
-        ? "Server sample is stale; waiting for a fresh response."
-        : sample.enabled == null
-          ? "Capture metrics unavailable in this runtime. Launch a new instance after updating its image."
-          : sample.enabled === false
-            ? "Capture diagnostics were disabled when this instance started."
-            : "Live sample · capture target " + sample.target_hz + " Hz";
+    ? "Connecting to Selkies…"
+    : !fresh ? "Waiting for live stream metrics…" : "Live Selkies sample · stream FPS, not game FPS";
   for (const [key, , unit] of metrics) {
     const value = sample[key];
-    const serverMetric =
-      /^(capture|game_|stream_|gpu_|container_|bandwidth_|software_threads)/.test(
-        key,
-      );
     values.querySelector('[data-metric="' + key + '"]').textContent =
-      value == null || (serverMetric && !fresh)
+      value == null
         ? "—"
         : (typeof value === "number"
             ? value.toFixed(key === "decode_errors" ? 0 : 1)
@@ -406,6 +389,7 @@ function sampleDiagnostics() {
 }
 function toggleDiagnostics(open) {
   diagnostics.hidden = !open;
+  viewer.diagnostics(open);
   document
     .querySelector("#diagnostics-toggle")
     .setAttribute("aria-expanded", String(open));
@@ -453,5 +437,26 @@ document.addEventListener("fullscreenchange", () => {
   fullscreenButton.title = label;
   fullscreenButton.setAttribute("aria-pressed", String(active));
   requestAnimationFrame(fit);
+  returnFocus();
+});
+
+// Browser audio gain only; game mixer and server codec settings stay untouched.
+const audioVolume = document.querySelector('#audio-volume');
+const audioMuted = document.querySelector('#audio-muted');
+audioVolume.value = preference('audio-volume') || '1';
+audioMuted.checked = preference('audio-muted') === 'true';
+function applyAudio() {
+  savePreference('audio-volume', audioVolume.value);
+  savePreference('audio-muted', String(audioMuted.checked));
+  viewer.audio(audioVolume.value, audioMuted.checked);
+}
+audioVolume.addEventListener('input', applyAudio);
+audioMuted.addEventListener('change', applyAudio);
+
+// The authenticated server authorizes the administrator session independently;
+// this checkbox only controls visibility of its native technical dashboard.
+document.querySelector('#native-panel-toggle').addEventListener('change', event => {
+  viewer.showNativePanel(event.target.checked);
+  settingsDialog.close();
   returnFocus();
 });
